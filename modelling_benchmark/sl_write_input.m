@@ -7,34 +7,38 @@ c=ConstantObj();  % all the constants, we suggest to use c.g rather than 9.81 in
 fil=filObj('read_from_file','no');
 
 % the default value for 'fid' is -1, meaning, this will not write to SUTRA.fil if export
-fil.terms.('inp').('fname') ='PART1.inp' ; fil.terms.('inp').('fid')   =50;
-fil.terms.('ics').('fname') ='PART1.ics' ; fil.terms.('ics').('fid')   =55;
-fil.terms.('lst').('fname') ='PART1.lst' ; fil.terms.('lst').('fid')   =60;
-fil.terms.('rst').('fname') ='PART1.rst' ; fil.terms.('rst').('fid')   =66;
-fil.terms.('nod').('fname') ='PART1.nod' ; fil.terms.('nod').('fid')   =30;
-fil.terms.('ele').('fname') ='PART1.ele' ; fil.terms.('ele').('fid')   =40;
-fil.terms.('obs').('fname') ='PART1.obs' ; fil.terms.('obs').('fid')   =70;
-fil.terms.('smy').('fname') ='PART1.smy' ; fil.terms.('smy').('fid')   =80;
-fil.terms.('bcof').('fname')='PART1.bcof'; fil.terms.('bcof').('fid')  =91;
-fil.terms.('bcos').('fname')='PART1.bcos'; fil.terms.('bcos').('fid')  =93;
-fil.terms.('bcop').('fname')='PART1.bcop'; fil.terms.('bcop').('fid')  =92;
-fil.terms.('bcou').('fname')='PART1.bcou'; fil.terms.('bcou').('fid')  =94;
+fil.terms.('inp').('fname')  = 'PART1.inp' ; fil.terms.('inp').('fid')   = 50;
+fil.terms.('ics').('fname')  = 'PART1.ics' ; fil.terms.('ics').('fid')   = 55;
+fil.terms.('lst').('fname')  = 'PART1.lst' ; fil.terms.('lst').('fid')   = 60;
+fil.terms.('rst').('fname')  = 'PART1.rst' ; fil.terms.('rst').('fid')   = 66;
+fil.terms.('nod').('fname')  = 'PART1.nod' ; fil.terms.('nod').('fid')   = 30;
+fil.terms.('ele').('fname')  = 'PART1.ele' ; fil.terms.('ele').('fid')   = 40;
+fil.terms.('obs').('fname')  = 'PART1.obs' ; fil.terms.('obs').('fid')   = 70;
+fil.terms.('smy').('fname')  = 'PART1.smy' ; fil.terms.('smy').('fid')   = 80;
+fil.terms.('bcof').('fname') = 'PART1.bcof'; fil.terms.('bcof').('fid')  = 91;
+fil.terms.('bcos').('fname') = 'PART1.bcos'; fil.terms.('bcos').('fid')  = 93;
+fil.terms.('bcop').('fname') = 'PART1.bcop'; fil.terms.('bcop').('fid')  = 92;
+fil.terms.('bcou').('fname') = 'PART1.bcou'; fil.terms.('bcou').('fid')  = 94;
 
 
 fil.export_to_file();
 
-c_saltwater_kgPkg      = 0.035;
-c_freshwater_kgPkg     = 0.001;
-initial_head_aquifer_m = -2.8;
+c_saltwater_kgPkg          = 0.035;
+c_freshwater_kgPkg         = 0.001;
+initial_head_aquifer_m     = -2.8;
+initial_pond_water_depth_m = 0.5;
+permeability_silt_m2       = 5.38e-15;
+permeability_sand_m2       = 5.38e-11;
+pond_radius_m              = 50.1;
 
 %% inp file
-dx   = 1.0;
-dy   = 1;  % vertical direction
-dz   = 1;
+dx      = 1.0;
+dy      = 1;  % vertical direction
+dz      = 1;
 x_array = 0:dx:100;
 y_array = -10:dy:1;
-nx   = length(x_array);
-ny   = length(y_array);
+nx      = length(x_array);
+ny      = length(y_array);
 
 nex  = length(x_array)-1;
 ney  = length(y_array)-1;
@@ -71,8 +75,8 @@ node_index_mtx = reshape(ii,ny,nx);  %note node_index_mtx(52) = 52
 % the original matrix has the same shape as the one with gravity compensation but it is bottom-up
 
 node_index_mtx_gravity_compensated = flip(node_index_mtx);   % this makes a matrix that maps the node position in a xy plane.
-y_nod_mtx_gravity_compensated      = flip(y_nod_mtx);
-x_nod_mtx_gravity_compensated      = flip(x_nod_mtx);
+y_nod_mtx_gravity_compensated_m      = flip(y_nod_mtx);
+x_nod_mtx_gravity_compensated_m      = flip(x_nod_mtx);
 dx_cell_mtx_gravity_compensated    = flip(dx_cell_mtx);
 
 idx = 1;
@@ -191,7 +195,7 @@ inp.scalt  = 600;   %reduce to 3000
 %inp.scalt  = 150;   %reduce to 3000
 %inp.scalt  = 6000;   %reduce to 3000
 %inp.scalt  = 0.6;   %reduce to 3000
-inp.ntmax  = 50000;
+inp.ntmax  = 10000;
 inp.timei  = 0;
 inp.timel  = 1.e99;
 inp.timec  = 1.;
@@ -347,16 +351,13 @@ inp.l      = (1:ne)';
 inp.lreg   = zeros(ne,1)+1;
 
 
-pmax_mtx_gravity_compensated_m2= zeros(size(x_ele_mtx_gravity_compensated_m)) + 5.38e-11 ;   %background permeability
+pmax_mtx_gravity_compensated_m2= zeros(size(x_ele_mtx_gravity_compensated_m)) + permeability_sand_m2 ;   %background permeability
 
+mask_ele_mtx_silt_layer_gravity_compensated = y_ele_mtx_gravity_compensated_m  > -6  ;   % mask matrix, for element matrix 
 
-mask_silt_layer_gravity_compensated = y_ele_mtx_gravity_compensated_m>-6  ;   % identify silt layer location
-
-pmax_mtx_gravity_compensated_m2 (mask_silt_layer_gravity_compensated) =  5.38e-15;   % silt layer permeability
-
+pmax_mtx_gravity_compensated_m2 (mask_ele_mtx_silt_layer_gravity_compensated) =  permeability_silt_m2;   % silt layer permeability
 
 pmax_mtx_m2=flip(pmax_mtx_gravity_compensated_m2);
-
 
 pmax_array_m2 = pmax_mtx_m2(:);
 
@@ -383,15 +384,15 @@ inp.atmin  = zeros(ne,1)+0.5e-0;
 % ## DATASET 19:  Data for Specified Pressure Nodes
 %###  [IPBC]                [PBC]                [UBC]
 
-mask_mtx_aquifer_boundary_gravity_compensated = and(y_nod_mtx_gravity_compensated<-4, x_nod_mtx_gravity_compensated>99.99);  % below 4 metre, greater than 200 m away from the centre
-ipbc_node_idx_array                           = node_index_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated);
-pbc                                           = -(y_nod_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated) - initial_head_aquifer_m ) *c.g * (inp.rhow0 + inp.drwdu * c_saltwater_kgPkg);
+mask_nod_mtx_aquifer_boundary_gravity_compensated = and(y_nod_mtx_gravity_compensated_m<-4, x_nod_mtx_gravity_compensated_m>99.99);  % below 4 metre, greater than 200 m away from the centre
+ipbc_node_idx_array                           = node_index_mtx_gravity_compensated(mask_nod_mtx_aquifer_boundary_gravity_compensated);
+pbc                                           = -(y_nod_mtx_gravity_compensated_m(mask_nod_mtx_aquifer_boundary_gravity_compensated) - initial_head_aquifer_m ) *c.g * (inp.rhow0 + inp.drwdu * c_saltwater_kgPkg);
 
 
 
-%mask_mtx_aquifer_boundary_gravity_compensated_left = and(y_nod_mtx_gravity_compensated<-4, x_nod_mtx_gravity_compensated<0.01);
+%mask_mtx_aquifer_boundary_gravity_compensated_left = and(y_nod_mtx_gravity_compensated_m<-4, x_nod_mtx_gravity_compensated_m<0.01);
 %ipbc_node_idx_array_left                           = node_index_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated_left);
-%pbc_left                                      = -(y_nod_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated) - initial_head_aquifer_m +0.5 ) *c.g * inp.rhow0 ;
+%pbc_left                                      = -(y_nod_mtx_gravity_compensated_m(mask_mtx_aquifer_boundary_gravity_compensated) - initial_head_aquifer_m +0.5 ) *c.g * inp.rhow0 ;
 %
 %inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_left];
 %inp.pbc  = [pbc;pbc_left];
@@ -400,14 +401,22 @@ pbc                                           = -(y_nod_mtx_gravity_compensated(
 
 
 
-mask_mtx_aquifer_boundary_gravity_compensated_top = and(y_nod_mtx_gravity_compensated>0.9, x_nod_mtx_gravity_compensated<50.1);
-ipbc_node_idx_array_top                           = node_index_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated_top);
+mask_nod_mtx_aquifer_boundary_gravity_compensated_top = and(y_nod_mtx_gravity_compensated_m>-0.1, x_nod_mtx_gravity_compensated_m<pond_radius_m);
+ipbc_node_idx_array_top                           = node_index_mtx_gravity_compensated(mask_nod_mtx_aquifer_boundary_gravity_compensated_top);
 pbc_top                                      = zeros(size(ipbc_node_idx_array_top));
 
-inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_top];
-inp.pbc  = [pbc;pbc_top];
-inp.ubc  = [zeros(size(pbc))+c_saltwater_kgPkg;zeros(size(pbc_top))+c_freshwater_kgPkg];
+%inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_top];
+%inp.pbc  = [pbc;pbc_top];
+%inp.ubc  = [zeros(size(pbc))+c_saltwater_kgPkg;zeros(size(pbc_top))+c_freshwater_kgPkg];
+%inp.npbc = length(inp.pbc);
+
+
+
+inp.ipbc = ipbc_node_idx_array;
+inp.pbc  = pbc;
+inp.ubc  = zeros(size(pbc))+c_saltwater_kgPkg;
 inp.npbc = length(inp.pbc);
+
 
 %##
 %##  DATASET     22:  Ele        ment Incid      ence Data
@@ -439,10 +448,36 @@ inp.iin4= iin4;
 
 inp.export_to_file();
 
-pm1_mtx_gravity_compensated_pa= - (- initial_head_aquifer_m + y_nod_mtx_gravity_compensated)*c.g*c.rhow_pure_water;
 
+% setting the initial pressure as hydrostatic, in particular at the sandy aquifer, the silt layer will be overwritten
+pm1_mtx_gravity_compensated_pa= - (- initial_head_aquifer_m + y_nod_mtx_gravity_compensated_m)*c.g*c.rhow_pure_water;
+
+
+mask_nod_mtx_silt_layer_gravity_compensated = y_nod_mtx_gravity_compensated_m  > -6  ;   % mask matrix, for nod matrix 
+
+%set a relatively high suction in the silt layer
+pm1_mtx_gravity_compensated_pa ( mask_nod_mtx_silt_layer_gravity_compensated) = -20000;
+
+
+
+
+% put the top cell as zero pressure 
+pm1_mtx_gravity_compensated_pa(mask_nod_mtx_aquifer_boundary_gravity_compensated_top)=initial_pond_water_depth_m*c.rhow_pure_water*c.g;
 
 pm1_mtx_pa=flip(pm1_mtx_gravity_compensated_pa);
+
+
+% initial solute concentrtion, sandy aquifer has a saline concentration while silt has a fresh concentration
+um1_mtx_gravity_compensated_kgPkg= zeros(size(pm1_mtx_gravity_compensated_pa))+ c_saltwater_kgPkg;
+
+
+
+um1_mtx_gravity_compensated_kgPkg (mask_nod_mtx_silt_layer_gravity_compensated) = c_freshwater_kgPkg;
+
+
+um1_mtx_kgPkg=flip(um1_mtx_gravity_compensated_kgPkg);
+
+
 
 
 
@@ -454,8 +489,8 @@ ics.tics  = 0;
 %ics.pm1   = -30;
 ics.cpuni = 'NONUNIFORM';
 ics.pm1   = pm1_mtx_pa(:);
-ics.cuuni = 'UNIFORM';
-ics.um1   = c_saltwater_kgPkg ;
+ics.cuuni = 'NONUNIFORM';
+ics.um1   = um1_mtx_kgPkg ;
 ics.export_to_file();
 %
 %
