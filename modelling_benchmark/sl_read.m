@@ -21,6 +21,7 @@ s_idx  = strcmp(nod(1).label,'Saturation');
 sm_idx = strcmp(nod(1).label,'SM');
 vy_idx = strcmp(ele(1).label,'Y velocity');
 vx_idx = strcmp(ele(1).label,'X velocity');
+rek_idx = strcmp(ele(1).label,'REK');
 yele_idx = strcmp(ele(1).label,'Y origin');
 
 %readlabdata;

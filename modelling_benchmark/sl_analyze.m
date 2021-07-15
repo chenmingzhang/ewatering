@@ -22,10 +22,11 @@ p_top  = arrayfun(@(y) y.terms{p_idx}(inp.nn1),nod);
 sw_top = arrayfun(@(y) y.terms{s_idx}(inp.nn1),nod);
 
 
-fig_pos.left   = 0.09;
+fig_pos.left   = 0.05;
 fig_pos.bottom = 0.8;
 fig_pos.length = 0.3;
 fig_pos.height = 0.15;
+fig_pos.xy_plot_length = 0.15;
 
 %nt=10;
 %a.fig=figure;
@@ -58,7 +59,7 @@ point1.y_nod_m     = y_nod_array(point1.idx_nod);
 point1.mark_shape       = 'rx';
 point1.legend      = sprintf('x = %i ; y = %i',point1.x,point1.y);
 
-point2.x           = 50;
+point2.x           = 100;
 point2.y           = -6;
 xdist_array        = point2.x-x_nod_array;
 ydist_array        = point2.y-y_nod_array;
@@ -69,7 +70,7 @@ point2.y_nod_m     = y_nod_array(point2.idx_nod);
 point2.mark_shape       = 'gx';
 point2.legend      = sprintf('x = %i ; y = %i',point2.x,point2.y);
 
-point3.x           = 80;
+point3.x           = 120;
 point3.y           = -6;
 xdist_array        = point3.x-x_nod_array; ydist_array  = point3.y-y_nod_array;
 dist_array         = (xdist_array.^2+ydist_array.^2).^0.5;
@@ -119,21 +120,23 @@ for nt=2:2:length(nod)-1
     end
 
     %% -------------  sub 1 ET over time  --------------
-    a.sub1=subplot('position'...
-         ,[fig_pos.left,fig_pos.bottom,...
-          fig_pos.length,fig_pos.height]);
-    a.plot1=plot(time_day(1:nt),et1_mmday(1:nt),...
-             'k-','linewidth',a.lw);hold on
+    %a.sub1=subplot('position'...
+    %     ,[fig_pos.left,fig_pos.bottom,...
+    %      fig_pos.length,fig_pos.height]);
+    %a.plot1=plot(time_day(1:nt),et1_mmday(1:nt),...
+    %         'k-','linewidth',a.lw);hold on
     %a.plot1=plot(eslab(1,:),eslab(2,:),'cx','linewidth',a.lw);
-    get(gca,'xtick');
-    set(gca,'fontsize',10);
-    txt=sprintf('Result at day %.2f , k/_silt = %.2e m2, k/_sand = %.2e m2',nod(nt).tout*c.dayPsec,permeability_silt_m2,permeability_sand_m2);
-    title(txt);
-    xlabel('Time (day)','FontSize',a.fs);
-    ylabel('Evt (mm/day)','FontSize',a.fs);
-    axis([-1 time_day(end) -1 21])
-    %title('ead profile');
-    %legend('show','Location','East')
+    %get(gca,'xtick');
+    %set(gca,'fontsize',10);
+    %txt=sprintf('Result at day %.2f , k_silt = %.2e m2, k_sand = %.2e m2, init P in silt layer = %.2e Pa'...
+    %    ,nod(nt).tout*c.dayPsec,permeability_silt_m2,permeability_sand_m2,initial_silt_layer_pressure_pa);
+    %title(txt, 'Interpreter', 'none');
+
+    %xlabel('Time (day)','FontSize',a.fs);
+    %ylabel('Evt (mm/day)','FontSize',a.fs);
+    %axis([-1 time_day(end) -1 21])
+    %%title('ead profile');
+    %%legend('show','Location','East')
     
     
     
@@ -185,7 +188,7 @@ for nt=2:2:length(nod)-1
     axis([-1 time_nod_day(end) -0.005 0.04])
     
     
-    %% -------------  sub 4 sm over time  --------------
+    %% -------------  sub 4 pressure over time  --------------
     
     salt_dep=arrayfun(@(y) y.terms{sm_idx}(inp.nn1),nod(1:nt))/2165/area1*1000;
     a.sub4=subplot('position'...
@@ -256,11 +259,11 @@ for nt=2:2:length(nod)-1
     %axis([10, 40,9,10])
     
     
-    %% --------- plot sat profiles  ------------------
+    %% --------- plot saturation profiles  ------------------
     a.sub7=subplot('position'...
          ,[fig_pos.left,...
          fig_pos.bottom-3*fig_pos.height-0.25,...
-          fig_pos.length-0.09,fig_pos.height+0.1]);
+          fig_pos.xy_plot_length,fig_pos.height+0.1]);
     plot(nod(nt).terms{s_idx}(vertical_line_pond_centre.idx_nod)...
          ,nod(nt).terms{y_idx}(vertical_line_pond_centre.idx_nod)...
          ,'r-','linewidth',a.lw) ;hold on
@@ -271,7 +274,6 @@ for nt=2:2:length(nod)-1
     plot(nod(nt).terms{s_idx}(vertical_line_pond_outside.idx_nod)...
          ,nod(nt).terms{y_idx}(vertical_line_pond_outside.idx_nod)...
          ,'b-','linewidth',a.lw) ;hold on
-
 
     %plot(slab(2,:,1),slab(1,:,1),'rd',slab(2,:,2),...
     %    slab(1,:,2),'go',slab(2,:,3),slab(1,:,3),'cx','linewidth',a.lw);hold off;
@@ -287,15 +289,22 @@ for nt=2:2:length(nod)-1
     
     %% --------- plot conc profiles  ------------------
     a.sub8=subplot('position'...
-         ,[fig_pos.left+fig_pos.length,...
+         ,[fig_pos.left+(fig_pos.xy_plot_length+0.05),...
          fig_pos.bottom-3*fig_pos.height-0.25,...
-          fig_pos.length-0.09,fig_pos.height+0.1]);
-    plot(nod(nt).terms{c_idx}(1:inp.nn1)...
-         ,nod(nt).terms{y_idx}(1:inp.nn1)...
-         ,'linewidth',a.lw) ;hold off
+          fig_pos.xy_plot_length,fig_pos.height+0.1]);
+
+    plot(nod(nt).terms{c_idx}(vertical_line_pond_centre.idx_nod)...
+         ,nod(nt).terms{y_idx}(vertical_line_pond_centre.idx_nod)...
+         ,'r-','linewidth',a.lw) ;hold on
+    plot(nod(nt).terms{c_idx}(vertical_line_pond_boundary.idx_nod)...
+         ,nod(nt).terms{y_idx}(vertical_line_pond_boundary.idx_nod)...
+         ,'g-','linewidth',a.lw) ;hold on
+    plot(nod(nt).terms{c_idx}(vertical_line_pond_outside.idx_nod)...
+         ,nod(nt).terms{y_idx}(vertical_line_pond_outside.idx_nod)...
+         ,'b-','linewidth',a.lw) ;hold on
     x_rectangle = [0,0.04,0.04,0];
     y_rectangle = [-6,-6,-10,-10];
-    p=patch(x_rectangle,y_rectangle,'r');
+    p=patch(x_rectangle,y_rectangle,'r');hold off
     set(p,'FaceAlpha',0.5);
     %rectangle('Position',[0 -5 1 5],'FaceColor','red','FaceAlpha',0.5);  % no facealpha
     %plot(clab(2,:,1),clab(1,:,1),'rd',clab(2,:,2),clab(1,:,2)...
@@ -308,17 +317,26 @@ for nt=2:2:length(nod)-1
     
     %% --------- plot x velocity  ------------------
     a.sub9=subplot('position'...
-         ,[fig_pos.left+2*fig_pos.length,...
+         ,[fig_pos.left+2*(fig_pos.xy_plot_length+0.05),...
          fig_pos.bottom-3*fig_pos.height-0.25,...
-          fig_pos.length-0.09,fig_pos.height+0.1]);
+          fig_pos.xy_plot_length,fig_pos.height+0.1]);
     plot(ele(nt).terms{vx_idx}(1:inp.nn1-1)*c.secPday ...
          ,ele(nt).terms{yele_idx}(1:inp.nn1-1)...
          ,'linewidth',a.lw) ;hold off
+    
+    %% --------- plot relative permeability velocity  ------------------
+    a.sub9=subplot('position'...
+         ,[fig_pos.left+3*(fig_pos.xy_plot_length+0.05),...
+         fig_pos.bottom-3*fig_pos.height-0.25,...
+          fig_pos.xy_plot_length,fig_pos.height+0.1]);
 
-    %axis([-0.05, 0.28,0,0.05])
+    semilogx(ele(nt).terms{rek_idx}(1:inp.nn1-1) ...
+         ,ele(nt).terms{yele_idx}(1:inp.nn1-1)...
+         ,'linewidth',a.lw) ;hold off
+
     get(gca,'xtick');
     set(gca,'fontsize',12);
-    xlabel('vx (mm/day)','FontSize',a.fs);
+    xlabel('Relative permeability (-)','FontSize',a.fs);
     ylabel('Elevation (m)','FontSize',a.fs);
     
     saveas(gcf,['chart',num2str(nt),'.png'])
