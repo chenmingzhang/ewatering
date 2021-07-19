@@ -25,12 +25,11 @@ fil.export_to_file();
 
 c_saltwater_kgPkg          = 0.035;
 c_freshwater_kgPkg         = 0.001;
-initial_head_aquifer_m     = -6.8;  %originally -2.8
-initial_pond_water_depth_m = 2.5;
+initial_head_aquifer_m     = -4.8;
+initial_pond_water_depth_m = 0.5;
 initial_silt_layer_pressure_pa = -5e4;
 permeability_silt_m2       = 5.38e-15;
-%permeability_sand_m2       = 5.38e-11;
-permeability_sand_m2       = 5.38e-10;
+permeability_sand_m2       = 5.38e-11;
 pond_radius_m              = 100.1;
 
 %% inp file
@@ -177,7 +176,6 @@ inp.istore = 9999;
 %%##  DATASET 5:  Numerical Control Parameters
 inp.up   = 0;
 inp.gnup = 0.01;
-%inp.gnup = 0.000001;
 inp.gnuu = 0.01;
 
 
@@ -194,11 +192,11 @@ inp.schtyp = 'TIME CYCLE';
 inp.creft  = 'ELAPSED';
 %inp.scalt  = 6000;   %reduce to 3000
 %inp.scalt  = 3000;   %reduce to 3000
-inp.scalt  = 1200;   %reduce to 3000
+inp.scalt  = 600;   %reduce to 3000
 %inp.scalt  = 150;   %reduce to 3000
 %inp.scalt  = 6000;   %reduce to 3000
 %inp.scalt  = 0.6;   %reduce to 3000
-inp.ntmax  = 15000;
+inp.ntmax  = 20000;
 inp.timei  = 0;
 inp.timel  = 1.e99;
 inp.timec  = 1.;
@@ -396,7 +394,7 @@ pbc                                           = -(y_nod_mtx_gravity_compensated_
 %mask_mtx_aquifer_boundary_gravity_compensated_left = and(y_nod_mtx_gravity_compensated_m<-4, x_nod_mtx_gravity_compensated_m<0.01);
 %ipbc_node_idx_array_left                           = node_index_mtx_gravity_compensated(mask_mtx_aquifer_boundary_gravity_compensated_left);
 %pbc_left                                      = -(y_nod_mtx_gravity_compensated_m(mask_mtx_aquifer_boundary_gravity_compensated) - initial_head_aquifer_m +0.5 ) *c.g * inp.rhow0 ;
-
+%
 %inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_left];
 %inp.pbc  = [pbc;pbc_left];
 %inp.ubc  = [zeros(size(pbc))+c_saltwater_kgPkg;zeros(size(pbc_left))+c_freshwater_kgPkg];
@@ -404,9 +402,9 @@ pbc                                           = -(y_nod_mtx_gravity_compensated_
 
 
 
-mask_nod_mtx_aquifer_boundary_gravity_compensated_top = and(y_nod_mtx_gravity_compensated_m>0.9, x_nod_mtx_gravity_compensated_m<pond_radius_m);
+mask_nod_mtx_aquifer_boundary_gravity_compensated_top = and(y_nod_mtx_gravity_compensated_m>-0.1, x_nod_mtx_gravity_compensated_m<pond_radius_m);
 ipbc_node_idx_array_top                           = node_index_mtx_gravity_compensated(mask_nod_mtx_aquifer_boundary_gravity_compensated_top);
-pbc_top                                      = zeros(size(ipbc_node_idx_array_top))+initial_pond_water_depth_m;
+pbc_top                                      = zeros(size(ipbc_node_idx_array_top));
 
 
 
@@ -417,25 +415,22 @@ porosity_nod_mtx_gravity_compensated= zeros (size(mask_porosity_nod_silt_layer_g
 
 porosity_nod_mtx_gravity_compensated(mask_porosity_nod_silt_layer_gravity_compensatred)=0.03; % layer with low porosity
 
-
-porosity_nod_mtx_gravity_compensated(mask_nod_mtx_aquifer_boundary_gravity_compensated_top ) = 0.45
-
 porosity_nod_mtx =flip( porosity_nod_mtx_gravity_compensated);
 
 inp.por = porosity_nod_mtx(:);
 
 
-inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_top];
-inp.pbc  = [pbc;pbc_top];
-inp.ubc  = [zeros(size(pbc))+c_saltwater_kgPkg;zeros(size(pbc_top))+c_freshwater_kgPkg];
-inp.npbc = length(inp.pbc);
-
-
-
-%inp.ipbc = ipbc_node_idx_array;
-%inp.pbc  = pbc;
-%inp.ubc  = zeros(size(pbc))+c_saltwater_kgPkg;
+%inp.ipbc = [ipbc_node_idx_array; ipbc_node_idx_array_top];
+%inp.pbc  = [pbc;pbc_top];
+%inp.ubc  = [zeros(size(pbc))+c_saltwater_kgPkg;zeros(size(pbc_top))+c_freshwater_kgPkg];
 %inp.npbc = length(inp.pbc);
+
+
+
+inp.ipbc = ipbc_node_idx_array;
+inp.pbc  = pbc;
+inp.ubc  = zeros(size(pbc))+c_saltwater_kgPkg;
+inp.npbc = length(inp.pbc);
 
 
 %##

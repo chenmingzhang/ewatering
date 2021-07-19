@@ -1,7 +1,7 @@
-et1_kgs   = -arrayfun(@(y) y.qin(1),bcof);
-area1     = 0.5D-6; % hard coding
-et1_mmday = et1_kgs/area1*86400;
-time_day  = [bcof.tout]/3600/24;
+%et1_kgs   = -arrayfun(@(y) y.qin(1),bcof);
+%area1     = 0.5D-6; % hard coding
+%et1_mmday = et1_kgs/area1*86400;
+%time_day  = [bcof.tout]/3600/24;
 time_nod_day= arrayfun(@(y) y.tout,nod) * c.dayPsec;
 
 
@@ -120,12 +120,12 @@ for nt=2:2:length(nod)-1
     end
 
     %% -------------  sub 1 ET over time  --------------
-    %a.sub1=subplot('position'...
-    %     ,[fig_pos.left,fig_pos.bottom,...
-    %      fig_pos.length,fig_pos.height]);
+    a.sub1=subplot('position'...
+         ,[fig_pos.left,fig_pos.bottom,...
+          fig_pos.length,fig_pos.height]);
     %a.plot1=plot(time_day(1:nt),et1_mmday(1:nt),...
     %         'k-','linewidth',a.lw);hold on
-    %a.plot1=plot(eslab(1,:),eslab(2,:),'cx','linewidth',a.lw);
+    %%a.plot1=plot(eslab(1,:),eslab(2,:),'cx','linewidth',a.lw);
     %get(gca,'xtick');
     %set(gca,'fontsize',10);
     %txt=sprintf('Result at day %.2f , k_silt = %.2e m2, k_sand = %.2e m2, init P in silt layer = %.2e Pa'...
@@ -135,8 +135,8 @@ for nt=2:2:length(nod)-1
     %xlabel('Time (day)','FontSize',a.fs);
     %ylabel('Evt (mm/day)','FontSize',a.fs);
     %axis([-1 time_day(end) -1 21])
-    %%title('ead profile');
-    %%legend('show','Location','East')
+    %title('ead profile');
+    %legend('show','Location','East')
     
     
     
@@ -190,7 +190,7 @@ for nt=2:2:length(nod)-1
     
     %% -------------  sub 4 pressure over time  --------------
     
-    salt_dep=arrayfun(@(y) y.terms{sm_idx}(inp.nn1),nod(1:nt))/2165/area1*1000;
+    %salt_dep=arrayfun(@(y) y.terms{sm_idx}(inp.nn1),nod(1:nt))/2165/area1*1000;
     a.sub4=subplot('position'...
          ,[fig_pos.left+0.5,fig_pos.bottom-fig_pos.height,...
           fig_pos.length,fig_pos.height]);
