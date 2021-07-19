@@ -208,9 +208,14 @@ for nt=2:2:length(nod)-1
              'c-','linewidth',a.lw,'displayname',point3.legend);hold off
     get(gca,'xtick');
     set(gca,'fontsize',10);
-    legend('location','east','fontsize',5)
-    xlabel('Time (day)','FontSize',a.fs);
-    ylabel('pressure (pa)','FontSize',a.fs);
+    %lgd = legend();
+    %lgd.location='east';
+    %lgd.fontsize=5;
+    %legend on
+    legend('Location','east')
+    %legend('fontsize',5)
+    %xlabel('Time (day)','FontSize',a.fs);
+    %ylabel('pressure (pa)','FontSize',a.fs);
     %axis([-1 time_day(end) -0.005 0.3])
     
     
