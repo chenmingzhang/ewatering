@@ -29,8 +29,11 @@ initial_head_aquifer_m     = -4.8;
 initial_pond_water_depth_m = 0.5;
 initial_silt_layer_pressure_pa = -5e4;
 permeability_silt_m2       = 5.38e-15;
-permeability_sand_m2       = 5.38e-11;
+permeability_sand_m2       = 5.38e-12;
 pond_radius_m              = 100.1;
+porosity_sand              = 0.43;
+porosity_silt              = 0.03;
+porosity_pond              = 0.99;
 
 %% inp file
 dx      = 1.0;
@@ -335,7 +338,7 @@ inp.x    = x_nod_array;
 inp.y    = y_nod_array;
 %inp.z    = zeros(nn,1)+dz;
 inp.z    = 2*pi*inp.x+0.1;
-inp.por  = zeros(nn,1)+0.43;
+inp.por  = zeros(nn,1)+porosity_sand;
 
 
 %##                              [PMAXFA]        [PMINFA]        [ANG1FA]        [ALMAXF]        [ALMINF]        [ATMAXF]        [ATMINF]
@@ -402,20 +405,28 @@ pbc                                           = -(y_nod_mtx_gravity_compensated_
 
 
 
-mask_nod_mtx_aquifer_boundary_gravity_compensated_top = and(y_nod_mtx_gravity_compensated_m>-0.1, x_nod_mtx_gravity_compensated_m<pond_radius_m);
-ipbc_node_idx_array_top                           = node_index_mtx_gravity_compensated(mask_nod_mtx_aquifer_boundary_gravity_compensated_top);
+mask_nod_mtx_pond_cell_gravity_compensated = and(y_nod_mtx_gravity_compensated_m>-0.1, x_nod_mtx_gravity_compensated_m<pond_radius_m);
+ipbc_node_idx_array_top                           = node_index_mtx_gravity_compensated(mask_nod_mtx_pond_cell_gravity_compensated);
 pbc_top                                      = zeros(size(ipbc_node_idx_array_top));
 
 
 
+% change porosity for silt layer
+mask_porosity_nod_silt_layer_gravity_compensatred = and(y_nod_mtx_gravity_compensated_m<-0.5, y_nod_mtx_gravity_compensated_m>-8);
+porosity_nod_mtx_gravity_compensated= zeros (size(mask_porosity_nod_silt_layer_gravity_compensatred))+porosity_sand;
+porosity_nod_mtx_gravity_compensated(mask_porosity_nod_silt_layer_gravity_compensatred)=porosity_silt; % layer with low porosity
 
-mask_porosity_nod_silt_layer_gravity_compensatred = and(y_nod_mtx_gravity_compensated_m<-0.5, y_nod_mtx_gravity_compensated_m>-8)
 
-porosity_nod_mtx_gravity_compensated= zeros (size(mask_porosity_nod_silt_layer_gravity_compensatred))+0.43;
 
-porosity_nod_mtx_gravity_compensated(mask_porosity_nod_silt_layer_gravity_compensatred)=0.03; % layer with low porosity
+porosity_nod_mtx_gravity_compensated(mask_nod_mtx_pond_cell_gravity_compensated) = porosity_pond;
+
+
 
 porosity_nod_mtx =flip( porosity_nod_mtx_gravity_compensated);
+
+
+
+
 
 inp.por = porosity_nod_mtx(:);
 
@@ -477,7 +488,7 @@ mask_nod_mtx_silt_layer_gravity_compensated = y_nod_mtx_gravity_compensated_m  >
 
 
 % put the top cell as zero pressure 
-pm1_mtx_gravity_compensated_pa(mask_nod_mtx_aquifer_boundary_gravity_compensated_top)=initial_pond_water_depth_m*c.rhow_pure_water*c.g;
+pm1_mtx_gravity_compensated_pa(mask_nod_mtx_pond_cell_gravity_compensated)=initial_pond_water_depth_m*c.rhow_pure_water*c.g;
 
 pm1_mtx_pa=flip(pm1_mtx_gravity_compensated_pa);
 
