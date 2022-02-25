@@ -106,3 +106,34 @@ stress_period_data = {0: bound_sp1, 1: bound_sp2}
 # Create the flopy ghb object
 ghb = flopy.modflow.ModflowGhb(mf, stress_period_data=stress_period_data)
 '''
+
+#%%
+ibound_chd_mask=np.ma.masked_equal(ibound,ibound_chd)
+
+
+ibound_chd_mask=np.ma.masked_equal(ibound_lrc,ibound_chd)
+
+
+chd_node_index=np.where(ibound_chd_mask.mask)
+
+
+stress_period_data = {}
+
+bound_sp0 = []
+for i in np.arange(np.sum(ibound_chd_mask.mask)):
+   bound_sp0.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],0,0]  )
+bound_sp1=[]
+for i in np.arange(np.sum(ibound_chd_mask.mask)):
+   bound_sp1.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],-10,-10]  )
+
+bound_sp2=[]
+for i in np.arange(np.sum(ibound_chd_mask.mask)):
+   bound_sp2.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],0,0]  )
+
+
+
+stress_period_data={0:bound_sp0,1:bound_sp1,2:bound_sp2}
+
+
+# write to chd package
+chd=flopy.modflow.mfchd.ModflowChd(model=mf,stress_period_data=stress_period_data)
