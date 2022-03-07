@@ -59,6 +59,7 @@ vertices_elev_layer_l_list_m = np.linspace(ztop_m, zbot_m, nlay + 1)  # layer el
 nper   = 2                  # number of stress periods
 perlen = [100,100]          # length of stress periods  days 
 nstp   = [100,100]          # number of steps per stress periods
+tsmult = 1. # the multiplier for the length of successive time steps, 1 means time step is always the same
 bool_steady_state_stress_period = [False, False]     # if the results needs to be in steady state
 step_interval_output = 2    # output will be saved every # of intervals
 
@@ -80,21 +81,72 @@ laytyp_l_list = np.ones(nlay)   # vunconfined 1
 
 #%%
 modelname = 'ewatering'
-mf = flopy.modflow.Modflow(modelname, exe_name='mf2005')
-dis = flopy.modflow.ModflowDis(mf, 
-                               nlay,                    # number of layers of cells, not layer of vertices
-                               nrow, 
-                               ncol,            # the is the number of cells, not the number of vertices
-                               delr   = delr_m, #np.arange(ncol),#  delr_m, #x_coordiate_cell_r_list_m, #delr_m, #delr (float or array of floats (ncol), optional) – An array of spacings along a row (the default is 1.0).
-                               delc   = delc_m, #np.arange(nrow),# delc (float or array of floats (nrow), optional) – An array of spacings along a column (the default is 0.0).
-                               top    = ztop_m, # An array of the top elevation of layer 1ztop_m, 
-                               botm   = vertices_elev_layer_l_list_m[1:], # An array of the bottom elevation of layer (cell)  
-                               nper   = nper, 
-                               perlen = perlen, 
-                               nstp   = nstp, 
-                               steady = bool_steady_state_stress_period,
-                               itmuni = 4)      # itmuni 4 means time unit is days for this model
-# https://github.com/modflowpy/flopy/blob/5fcf9709ec8a655106c57d55657c47b1d4987812/examples/Notebooks/flopy3_gridgen.ipynb
+#mf = flopy.modflow.Modflow(modelname, exe_name='mf2005')
+ws = os.path.abspath('../Model/')
+sim = flopy.mf6.MFSimulation(sim_name=modelname, 
+                             version='mf6',
+#                             exe_name='../Exe/mf6',  #comment this line means flopy will look for mf6 from system folders
+                             sim_ws=ws)
+
+tdis = flopy.mf6.ModflowTdis(sim, 
+                             time_units='DAYS',
+                             nper=nper, 
+                             perioddata=[[perlen[0],nstp[0],tsmult],[perlen[1],nstp[1],tsmult]]
+                            )
+
+#%% dis
+fModName = 'FlowModel'
+gwf = flopy.mf6.ModflowGwf(sim, 
+                           modelname  =  fModName, 
+                           newtonoptions  = True)
+#%%  ims package
+nouter, ninner = 700, 300
+hclose, rclose, relax = 1e-8, 1e-6, 0.97   # convergene criteria
+imsgwf = flopy.mf6.ModflowIms(sim, print_option='ALL',
+                                  outer_dvclose=hclose,
+                                  outer_maximum=nouter,
+                                  under_relaxation='NONE',
+                                  inner_maximum=ninner,
+                                  inner_dvclose=hclose, 
+                                  rcloserecord=rclose,
+                                  linear_acceleration='BICGSTAB',
+                                  scaling_method='NONE',
+                                  reordering_method='NONE',
+                                  relaxation_factor=relax,
+                                  filename='{}.ims'.format(fModName))
+
+#%%
+
+idomain = np.full((nlay, nrow, ncol), 1) # similar to IBOUND where 0 means inactive cell, 1 means active cell
+# idomain[0, 0, 1:6] = 0
+# idomain[1, 0, 2:5] = 0
+# idomain[2, 0, 3:4] = 0
+dis = flopy.mf6.ModflowGwfdis(gwf, 
+                              nlay=nlay, 
+                              nrow=nrow, 
+                              ncol=ncol,
+                              delr=delr_m, 
+                              delc=delc_m,
+                              top= ztop_m, 
+                              botm=vertices_elev_layer_l_list_m[1:], 
+                              idomain=1)
+
+
+
+# dis = flopy.modflow.ModflowDis(mf, 
+#                                nlay,                    # number of layers of cells, not layer of vertices
+#                                nrow, 
+#                                ncol,            # the is the number of cells, not the number of vertices
+#                                delr   = delr_m, #np.arange(ncol),#  delr_m, #x_coordiate_cell_r_list_m, #delr_m, #delr (float or array of floats (ncol), optional) – An array of spacings along a row (the default is 1.0).
+#                                delc   = delc_m, #np.arange(nrow),# delc (float or array of floats (nrow), optional) – An array of spacings along a column (the default is 0.0).
+#                                top    = ztop_m, # An array of the top elevation of layer 1ztop_m, 
+#                                botm   = vertices_elev_layer_l_list_m[1:], # An array of the bottom elevation of layer (cell)  
+#                                nper   = nper, 
+#                                perlen = perlen, 
+#                                nstp   = nstp, 
+#                                steady = bool_steady_state_stress_period,
+#                                itmuni = 4)      # itmuni 4 means time unit is days for this model
+# # https://github.com/modflowpy/flopy/blob/5fcf9709ec8a655106c57d55657c47b1d4987812/examples/Notebooks/flopy3_gridgen.ipynb
 
 
     
@@ -164,56 +216,94 @@ ibound_1d_list[adpoly_intersect.nodenumber]  = ibound_chd
 ibound_1d_list[adline_intersect.nodenumber]  = ibound_constant_head
 ibound_lrc_list = ibound_1d_list.reshape(nlay,nrow,ncol)
 
+dis.idomain = ibound_lrc_list
+
 fig = plt.figure(figsize=(15, 15))
 ax = fig.add_subplot(1, 1, 1, aspect='equal')
-arr=g.plot(ax, a=ibound_1d_list, masked_values=[0], edgecolor='none', cmap='jet')
-mm = flopy.plot.PlotMapView(model=mf)
+arr=g.plot(ax, a=dis.idomain, masked_values=[0], edgecolor='none', cmap='jet')
+mm = flopy.plot.PlotMapView(model=gwf)
 #flopy.plot.plot_shapefile(rf2shp, ax=ax, facecolor='yellow', alpha=0.25)
 mm.plot_grid()
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
 ax.set_xlabel('X (m)', fontsize=40)
 ax.set_ylabel('Y (m)', fontsize=40)
-ax.set_title('IBOUND', fontsize=50)
+ax.set_title('IDOMAIN', fontsize=50)
 #ax.colorbar(shrink=0.5, ax=ax)
 #plt.colorbar(cax=ax)
-cbar=plt.colorbar(arr, shrink=0.8, ax=ax)
-cbar.ax.tick_params(labelsize=30)
+#cbar=plt.colorbar(arr, shrink=0.8, ax=ax)
+#cbar.ax.tick_params(labelsize=30)
 #quadmesh = mf.plot_ibound() 
 #flopy.plot.plot_shapefile(rf2shp, ax=ax, facecolor='yellow', alpha=0.25)
 
 
-#%% add bas, lpf and pcg package
 #%% the ibound will be defined different this time where we start with 1-D array and later move to 3-D
 
 
 # interesting to see that the it is better to be converged, if the head is above zero 
 strt_lrc_list_m = -5. * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
-bas = flopy.modflow.ModflowBas(mf, 
-                               ibound = ibound_lrc_list, 
-                               strt   = strt_lrc_list_m
-                               )
-# https://modflowpy.github.io/flopydoc/mflpf.html
-lpf = flopy.modflow.ModflowLpf(mf, 
-                               hk     = hk_lrc_list, 
-                               vka    = vka_lrc_list, 
-                               sy     = sy, 
-                               ss     = ss, 
-                               laytyp = laytyp_l_list, 
-                               ipakcb = 53    ,
-                               hdry   = +1e-30,
-                               wetfct = 0.1   ,
-                               iwetit = 3     ,
-                               laywet = 1     ,
-                               wetdry = -1    )
+ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
+
+# bas = flopy.modflow.ModflowBas(mf, 
+#                                ibound = ibound_lrc_list, 
+#                                strt   = strt_lrc_list_m
+#                                )
+#%% #k33 ([double]) –
+#k33 (double) is the hydraulic conductivity of the third ellipsoid axis (or the ratio of K33/K if the K33OVERK option is specified); for an unrotated case, this is the vertical hydraulic conductivity.
+#When anisotropy is applied, K33 corresponds to the K33 tensor component. All included cells (IDOMAIN > 0) must have a K33 value greater than zero.
+# icelltype (integer) flag for each cell that specifies how saturated thickness is treated. 0 means saturated thickness is held constant; 
+#:math:`>`0 means saturated thickness varies with computed head when head is below the cell top; 
+#:math:`<`0 means saturated thickness varies with computed head unless the THICKSTRT option is in effect. 
+# When THICKSTRT is in effect, a negative value of icelltype indicates that saturated thickness will be computed as STRT-BOT and held constant.
+# Kh = 1.
+# Kv = 1.
+npf = flopy.mf6.ModflowGwfnpf(gwf, xt3doptions = False,
+                                  save_flows = True,
+                                  save_specific_discharge = True,
+                                  icelltype = 1,   # meaning that transmissivity changes with heads
+                                  k   = hk_lrc_list, 
+                                  k33 = vka_lrc_list)
+
+sto = flopy.mf6.ModflowGwfsto(gwf, 
+                              sy = sy, 
+                              ss = ss, 
+                              iconvert=1
+                              )
+# # https://modflowpy.github.io/flopydoc/mflpf.html
+# lpf = flopy.modflow.ModflowLpf(mf, 
+#                                hk     = hk_lrc_list, 
+#                                vka    = vka_lrc_list, 
+#                                sy     = sy, 
+#                                ss     = ss, 
+#                                laytyp = laytyp_l_list, 
+#                                ipakcb = 53    ,
+#                                hdry   = +1e-30,
+#                                wetfct = 0.1   ,
+#                                iwetit = 3     ,
+#                                laywet = 1     ,
+#                                wetdry = -1    )
 #
-pcg = flopy.modflow.ModflowPcg(mf)
+#%%
+# CZ220303 removed 'steps' to make it work
+oc = flopy.mf6.ModflowGwfoc(gwf,
+                            budget_filerecord ='{}.cbc'.format(fModName),
+                            head_filerecord   ='{}.hds'.format(fModName),
+                            headprintrecord   =[
+                                ('COLUMNS', 10, 'WIDTH', 15,
+                                 'DIGITS', 6, 'GENERAL')],
+                            saverecord=[('HEAD', 'ALL'),
+                                        ('BUDGET', 'ALL')],
+                            printrecord=[('HEAD', 'LAST'),
+                                         ('BUDGET', 'LAST')])
+#pcg = flopy.modflow.ModflowPcg(mf)
+
+
 
 #%% plot grid and ibound to show results plot the vertical vview of the model
 fig = plt.figure(figsize=(12, 9))
 ax  = fig.add_subplot(1, 1, 1, aspect="equal")
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 10})
-arr = modeLx_msect.plot_array(ibound_lrc_list[0,:,:])
+modeLx_msect = flopy.plot.PlotCrossSection(model=gwf, line={'Row': 10})
+arr = modeLx_msect.plot_array(dis.idomain[0,:,:])
 modeLx_msect.plot_grid()
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
@@ -245,45 +335,53 @@ cbar.ax.tick_params(labelsize=30)
 #modeLx_msect.zcentergrid
 
 
-stress_period_data = {}
-for kper in range(nper):
-    for kstp in range(nstp[kper]):
-        if np.mod(kstp,step_interval_output) == 0:
-            stress_period_data[(kper, kstp)] = ['save head',
-                                                'save drawdown',
-                                                'save budget',
-                                                'print head',
-                                                'print budget']
-# output control            
-oc = flopy.modflow.ModflowOc(mf, 
-                             stress_period_data=stress_period_data,
-                             compact=True)
+# stress_period_data = {}
+# for kper in range(nper):
+#     for kstp in range(nstp[kper]):
+#         if np.mod(kstp,step_interval_output) == 0:
+#             stress_period_data[(kper, kstp)] = ['save head',
+#                                                 'save drawdown',
+#                                                 'save budget',
+#                                                 'print head',
+#                                                 'print budget']
+# # output control            
+# oc = flopy.modflow.ModflowOc(mf, 
+#                              stress_period_data=stress_period_data,
+#                              compact=True)
 # recharge package
-recharge_rate_mPday = {"0":0.1,"1":0.2}   #0.1 #0.01
+recharge_rate_mPday = {"0":0.1,"1":0.1}   #0.1 #0.01
 
 # nrchop (int) – is the recharge option code. 
 # 1: Recharge to top grid layer only 
 # 2: Recharge to layer defined in irch 
 # 3: Recharge to highest active cell (default is 3).
-nrchop = 2
+nrchop = 1
 
 
-rch=flopy.modflow.ModflowRch(mf,
-                             rech   = recharge_rate_mPday,
-                             nrchop = nrchop,
-                             ipakcb = 1,
-                             stress_period_data   = {'0': adpoly_intersect.nodenumber , 
-                                       '1': adpoly_intersect.nodenumber}
-                             )
-mf.write_input()
-flopy.modflo
+# rch=flopy.modflow.ModflowRch(mf,
+#                              rech   = recharge_rate_mPday,
+#                              nrchop = nrchop,
+#                              ipakcb = 1,
+#                              stress_period_data   = {'0': adpoly_intersect.nodenumber , 
+#                                        '1': adpoly_intersect.nodenumber}
+#                              )
+rch = flopy.mf6.ModflowGwfrcha(
+    gwf, 
+    recharge   = 0.1,
+    #nrchop = 1
+    )
+#%%
+#gwf.write_input()
+sim.write_simulation(silent=False)
 
 # %% Run the model
 try:
     os.remove(os.path.join(model_ws, "{0}.hds".format(modelname)))
 except:
     pass
-success, mfoutput = mf.run_model(silent=True, pause=False, report=True)
+
+success,mfoutput = sim.run_simulation(silent=False, pause=False,report=True) #mfoutput = mf.run_model(silent=True, pause=False, report=True)
+
 if not success:
         raise Exception('MODFLOW did not terminate normalLy_m.')
 
@@ -308,7 +406,7 @@ ax = fig.add_subplot(1, 1, 1)
 #modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Column': 5})  
 # this will onLy_m work when nrow is more than 1
 ##CM modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Row': 0})
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': int(nrow/2) })
+modeLx_msect = flopy.plot.PlotCrossSection(model=gwf, line={'Row': int(nrow/2) })
 patches = modeLx_msect.plot_ibound()
 linecollection = modeLx_msect.plot_grid()
 t = ax.set_title('Row 0 Cross-Section with IBOUND Boundary Conditions')
@@ -317,7 +415,7 @@ t = ax.set_title('Row 0 Cross-Section with IBOUND Boundary Conditions')
 # head = headobj.get_data(totim=times_output_list_day[2])
 # ax.plot(dis.sr.xcentergrid[0,:],head[-1,0,:])
 head = headobj.get_data(totim=times_output_list_day[1])
-ax.plot(dis.get_node_coordinates()[1],head[-1,int(nrow/2),:])   
+ax.plot(gwf.modelgrid.xycenters[0],head[-1,int(nrow/2),:])   
 head = headobj.get_data(totim=times_output_list_day[1])
 head[head==1e-30] = np.nan
 
@@ -329,31 +427,31 @@ fig = plt.figure(figsize=(8, 3))
 ax  = fig.add_subplot(1, 1, 1)
 t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[0]))
 head = headobj.get_data(totim=times_output_list_day[0])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
+modeLx_msect = flopy.plot.PlotCrossSection(model=gwf, line={'Row': 0})
 arr = modeLx_msect.plot_array(head)
 grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0)
+ax.plot(gwf.modelgrid.xycenters[0] , head[-1,0,:], linewidth=5.0)
 plt.colorbar(arr, shrink=1, ax=ax)
 ax.set_xlabel('X (m)')
 ax.set_ylabel('Z (m)')
 
 
-times = cbbobj.get_times()
-qx = cbbobj.get_data(text="flow right face", totim=times_output_list_day[0])[0]
-qy = np.zeros((nlay, nrow, ncol), dtype=float)
-qz = cbbobj.get_data(text="flow lower face", totim=times_output_list_day[0])[0]
+# times = cbbobj.get_times()
+# qx = cbbobj.get_data(text="flow right face", totim=times_output_list_day[0])[0]
+# qy = np.zeros((nlay, nrow, ncol), dtype=float)
+# qz = cbbobj.get_data(text="flow lower face", totim=times_output_list_day[0])[0]
 
-modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
+# modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
 # %% Plot the Head distribution at the end of stress period 1
 #
 fig = plt.figure(figsize=(8, 3))
 ax  = fig.add_subplot(1, 1, 1)
 t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[1]))
 head = headobj.get_data(totim=times_output_list_day[1])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
+modeLx_msect = flopy.plot.PlotCrossSection(model=gwf, line={'Row': 0})
 arr = modeLx_msect.plot_array(head)
 grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0)
+ax.plot(gwf.modelgrid.xycenters[0] , head[-1,0,:], linewidth=5.0)
 plt.colorbar(arr, shrink=1, ax=ax)
 ax.set_xlabel('X (m)')
 ax.set_ylabel('Z (m)')

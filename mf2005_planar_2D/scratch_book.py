@@ -137,3 +137,13 @@ stress_period_data={0:bound_sp0,1:bound_sp1,2:bound_sp2}
 
 # write to chd package
 chd=flopy.modflow.mfchd.ModflowChd(model=mf,stress_period_data=stress_period_data)
+
+
+#%% a very quick way to show the surfae image.
+# sourced from https://github.com/modflowpy/flopy/blob/develop/examples/groundwater_paper/Notebooks/uspb.ipynb
+c = plt.imshow(grndElv, cmap='jet')
+plt.colorbar(c);
+
+#%% 
+mf.modelgrid # this is the location where all vertices are stored
+
