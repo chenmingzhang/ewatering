@@ -43,7 +43,7 @@ params = {'legend.fontsize': 'x-large',
          'xtick.labelsize':'x-large',
          'ytick.labelsize':'x-large'}
 
-# %% model set_up
+#%% model set_up
 Lx_m   = 300.    # from plot, y is plotted from left to right
 Ly_m   = 300.     # from plot, y is plotted upward
 ztop_m = 0.    # top elevation of z axis (gravity)
@@ -202,22 +202,7 @@ idomain_lrc_list = idomain_1d_list.reshape(nlay,nrow,ncol)
 
 dis.idomain = idomain_lrc_list
 
-fig = plt.figure(figsize=(15, 15))
-ax = fig.add_subplot(1, 1, 1, aspect='equal')
-#arr=g.plot(ax, a=dis.idomain, masked_values=[0], edgecolor='none', cmap='jet')
-mm = flopy.plot.PlotMapView(model=gwf)
-#mm.plot_ibound()
-#flopy.plot.plot_shapefile(rf2shp, ax=ax, facecolor='yellow', alpha=0.25)
 
-rch_ = mm.plot_bc("RCH")
-chd_ = mm.plot_bc("CHD")
-#obs_ = mm.plot_bc("OBS")
-mm.plot_grid()
-plt.xticks(fontsize=30)
-plt.yticks(fontsize=30)
-ax.set_xlabel('X (m)', fontsize=40)
-ax.set_ylabel('Y (m)', fontsize=40)
-ax.set_title('IDOMAIN', fontsize=50)
 #ax.colorbar(shrink=0.5, ax=ax)
 #plt.colorbar(cax=ax)
 #cbar=plt.colorbar(arr, shrink=0.8, ax=ax)
@@ -332,7 +317,9 @@ chd = flopy.mf6.ModflowGwfchd(
 from flopy.utils.gridintersect import GridIntersect
 from shapely.geometry import Point
 ix = GridIntersect(gwf.modelgrid, method='vertex') # CZ220310 if the point is at the grid, both cells will be included.
-obs_id = ix.intersects(Point(150.1,150.1))
+
+point_centre_pond = Point(150.1,150.1)
+obs_id = ix.intersects(point_centre_pond)
 # importing obs id
 #obs_wells = r".\objects\obs_wells.csv"
 #bs_vertices = np.genfromtxt(obs_wells, skip_header = 1, delimiter = ',')
@@ -345,7 +332,49 @@ obs_loc = (0, obs_id['cellids'][0][0], obs_id['cellids'][0][1])  # (layerid, row
 obs_id_2 = ix.intersects(Point(200.1,150.1))
 obs_loc_2 = (0, obs_id_2['cellids'][0][0], obs_id_2['cellids'][0][1])  # (layerid, rowid, columnid)
 
-# create package
+
+
+# dist_to_pond_centre_xy_ay_m = np.zeros([nrow,ncol],dtype=float)
+
+# for i in np.arange(nrow):
+#     for j in np.arange(ncol):
+#         dist = (gwf.modelgrid.xcellcenters[i][j] - point_centre_pond.x) **
+# pond bed slope in tangent value.
+pond_bed_slope_tan = 0.003  # np.tan(.5*np.pi/180) np.arctan(0.003)/np.pi*180
+
+dist_to_pond_centre_cell_rl_ay_m = (( gwf.modelgrid.xcellcenters - point_centre_pond.x ) ** 2. + \
+                                   ( gwf.modelgrid.ycellcenters - point_centre_pond.y ) ** 2. ) \
+                                   ** 0.5
+
+max_depth_m = radius_circle_m * pond_bed_slope_tan
+
+depth_cell_rl_ay_m = max_depth_m - dist_to_pond_centre_cell_rl_ay_m * pond_bed_slope_tan
+
+depth_cell_rl_ay_m [depth_cell_rl_ay_m <  0] =0
+
+surface_elevation_cell_rl_ay_m = ztop_m - depth_cell_rl_ay_m
+
+
+
+from mpl_toolkits.mplot3d.axes3d import Axes3D, get_test_data
+from matplotlib import cm
+
+fig = plt.figure(figsize=plt.figaspect(0.5))
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+
+# plot a 3D surface like in the example mplot3d/surface3d_demo
+
+surf = ax.plot_surface(gwf.modelgrid.xcellcenters, 
+                       gwf.modelgrid.ycellcenters, 
+                       surface_elevation_cell_rl_ay_m,
+                       rstride=1, cstride=1, cmap=cm.coolwarm,
+                       linewidth=0, antialiased=False)
+
+fig.colorbar(surf, shrink=0.5, aspect=10)
+
+dis.top = surface_elevation_cell_rl_ay_m
+
+#%% create observation package
 obs = flopy.mf6.ModflowUtlobs(
     model=gwf , # groundwater flow package to be used
     digits=10, # default digits to print out
@@ -430,6 +459,24 @@ ax.set_title('idomain', fontsize=50)
 #plt.colorbar(cax=ax)
 cbar=plt.colorbar(arr, shrink=0.2, ax=ax)
 cbar.ax.tick_params(labelsize=30)
+
+#%%
+fig = plt.figure(figsize=(15, 15))
+ax = fig.add_subplot(1, 1, 1, aspect='equal')
+#arr=g.plot(ax, a=dis.idomain, masked_values=[0], edgecolor='none', cmap='jet')
+mm = flopy.plot.PlotMapView(model=gwf)
+#mm.plot_ibound()
+#flopy.plot.plot_shapefile(rf2shp, ax=ax, facecolor='yellow', alpha=0.25)
+
+rch_ = mm.plot_bc("RCH")
+chd_ = mm.plot_bc("CHD")
+#obs_ = mm.plot_bc("OBS")
+mm.plot_grid()
+plt.xticks(fontsize=30)
+plt.yticks(fontsize=30)
+ax.set_xlabel('X (m)', fontsize=40)
+ax.set_ylabel('Y (m)', fontsize=40)
+ax.set_title('IDOMAIN', fontsize=50)
 #%%
 #gwf.write_input()
 sim.write_simulation(silent=False)
@@ -526,9 +573,6 @@ ax.set_ylabel('Z (m)')
 #     #layer = dis.get_layer(row,column,z)
 #     layer = 0
 #     return (layer, row , column)
-
-
-
 
 
 # # def extract_head_from_xyz(x,y,z,gwf=gwf):
