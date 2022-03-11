@@ -6,6 +6,10 @@ Created on Tue Feb 22 14:42:56 2022
 if hydraulic conductivity of the sandy layer
 is reduced, the large hydraulic conductivity in the oscillating boundary
 needs to be redued accordingLy_m 
+
+need to install: 
+pip install -U csaps
+
 """
 
 import os
@@ -42,7 +46,10 @@ params = {'legend.fontsize': 'x-large',
          'axes.titlesize':'x-large',
          'xtick.labelsize':'x-large',
          'ytick.labelsize':'x-large'}
+model_ws = os.path.join('.', 'data')
 
+
+print('Model workspace is : {}'.format(os.getcwd()))
 #%% model set_up
 Lx_m   = 300.    # from plot, y is plotted from left to right
 Ly_m   = 300.     # from plot, y is plotted upward
@@ -55,27 +62,86 @@ delr_m = Lx_m / ncol
 delc_m = Ly_m / nrow
 delv_m = (ztop_m - zbot_m) / nlay             # layer thickness
 vertices_elev_layer_l_list_m = np.linspace(ztop_m, zbot_m, nlay + 1)  # layer elevation array
-# time step parameters
-nper   = 2                  # number of stress periods
-perlen = [100,100]          # length of stress periods  days 
-nstp   = [100,100]          # number of steps per stress periods
-tsmult = 1. # the multiplier for the length of successive time steps, 1 means time step is always the same
-bool_steady_state_stress_period = [False, False]     # if the results needs to be in steady state
-step_interval_output = 2    # output will be saved every # of intervals
 
-#vertices_x_coordinate_r_list_m = arrange(0,1000,10)
+# # time step parameters
+# nper   = 2                  # number of stress periods
+# perlen = [100,100]          # length of stress periods  days 
 
-#dis.itmuni_dict
-#dis.itmuni
-#hk = 0.3   # how to change the time unit in flopy?  ITMUNI in dis #dis.itmuni_dict horizontal hydraulic conductivity
-#vka = 0.3  # vertical hydraulic conductivity
-hk_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * 10. #*30.   # making hydraulic conductivity array  [lay_row_column]
+# 
+# nstp   = [100,100]          # number of steps per stress periods
+# tsmult = [1. , 1.] # the multiplier for the length of successive time steps, 1 means time step is always the same
+# bool_steady_state_stress_period = [False, False]     # if the results needs to be in steady state
+
+#last for 200 days, using 200 stress period, each stress period has one day
+nper = 200
+perlen = np.ones(nper)
+nstp   = np.ones(nper,dtype=int)
+tsmult = np.ones(nper)
+bool_steady_state_stress_period = np.zeros(nper,dtype=bool)
+
+
+
+stress_period_end_time_days_ay = np.cumsum(perlen)
+ # output will be saved every # of intervals, unused at the moment
+step_interval_output = 2   
+
+# period data array input for dis package
+dis_perioddata_ay = []
+for i in np.arange(nper):
+    dis_perioddata_ay.append([perlen[i],nstp[i],tsmult[i]])
+
+hk_mPday = 10.0 
+hk_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * hk_mPday #*30.   # making hydraulic conductivity array  [lay_row_column]
 vka_lrc_list       = hk_lrc_list
 
 
 sy = 0.25    # specific yield, equivalent to effective porosity
 ss = 1.e-4   #  specific storitivity, corresponding to the compressibity of solid matrix and fluids (water)
-laytyp_l_list = np.ones(nlay)   # vunconfined 1 
+
+#%%  read field data, which forms input and are for verification of the model.
+field_data_ws = os.path.join(model_ws, 'field_data.csv')
+field_data_df = pd.read_csv(field_data_ws,
+                            parse_dates=['date_time'],
+                            index_col=0,
+                            )
+# the row index is time rather than 0,1,2. this will help analysis such as 
+#getting daily averge, max, min or data at a specific hours. 
+# to get data in row 2 use field_data_df.loc(2) 
+#field_data_df= field_data_df.set_index('date_time')
+field_data_df['time_elapsed_days'] = (field_data_df.index - field_data_df.index[0])/np.timedelta64(1, 'D')
+
+
+#%% create a time array, starting from zero, the list of times
+# this is needed as we need to use surface water level to calcuate the 
+# recharge at every step.
+# this does not consider the impact of tmulti
+# CZ220311 if tdis has this array, we do not need to produce here anymore.
+# 
+for i in np.arange(nper):
+    time_ay_current_stress_period = np.linspace(0,perlen[i]-perlen[i]/nstp[i],nstp[i]) 
+    if i == 0: 
+        times_ay_days= time_ay_current_stress_period
+    else:
+        times_ay_days = np.concatenate((times_ay_days, 
+                                        times_ay_days[-1] + 
+                                        perlen[i-1]/nstp[i-1] + 
+                                        time_ay_current_stress_period
+                                        ))
+
+#%% cubic spline interpolating the surface water depth folloing the measurement
+
+from csaps import csaps
+ys = csaps(field_data_df['time_elapsed_days'], 
+           field_data_df['surface_water_depth_m'],
+           times_ay_days, 
+           smooth=0.85)
+
+#%%
+fig=plt.figure()
+#df.plot(field_data_df.index,field_data_df['surface_water_depth_m'])
+field_data_df.plot(x='time_elapsed_days',y='surface_water_depth_m')
+plt.plot(times_ay_days,ys,'o')
+#field_data = np.genfromtxt(field_data_ws, delimiter=',')
 
 
 
@@ -88,10 +154,11 @@ sim = flopy.mf6.MFSimulation(sim_name=modelname,
 #                             exe_name='../Exe/mf6',  #comment this line means flopy will look for mf6 from system folders
                              sim_ws=ws)
 
+
 tdis = flopy.mf6.ModflowTdis(sim, 
                              time_units='DAYS',
                              nper=nper, 
-                             perioddata=[[perlen[0],nstp[0],tsmult],[perlen[1],nstp[1],tsmult]]
+                             perioddata=dis_perioddata_ay
                             )
 
 #%% dis
@@ -140,7 +207,7 @@ dis = flopy.mf6.ModflowGwfdis(gwf,
 # setup the active domain
 from flopy.utils.gridgen import Gridgen 
 # Check and make sure the data folder exists.
-model_ws = os.path.join('.', 'data')
+
 if not os.path.exists(model_ws):
     os.makedirs(model_ws)
 gridgen_ws = os.path.join(model_ws, 'gridgen')
@@ -194,12 +261,11 @@ rf2shp = os.path.join(gridgen_ws, 'rf0')
 #rf2shp = os.path.join(gridgen_ws, 'rf2')
 #%%  plot idomain
 #a[adpoly_intersect.nodenumber] = 2
-idomain_rch = 2            # all the idomains that will be subjected to recharge will be tagged with 2.
+idomain_rch = 2  # all the idomains that will be subjected to recharge will be tagged with 2.
 idomain_constant_head = 5 # chd
 idomain_1d_list[adpoly_intersect.nodenumber]  = idomain_rch
 idomain_1d_list[adline_intersect.nodenumber]  = idomain_constant_head
 idomain_lrc_list = idomain_1d_list.reshape(nlay,nrow,ncol)
-
 dis.idomain = idomain_lrc_list
 
 
@@ -218,10 +284,7 @@ dis.idomain = idomain_lrc_list
 strt_lrc_list_m = -5. * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
 ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
 
-# bas = flopy.modflow.ModflowBas(mf, 
-#                                idomain = idomain_lrc_list, 
-#                                strt   = strt_lrc_list_m
-#                                )
+
 #%% #k33 ([double]) –
 #k33 (double) is the hydraulic conductivity of the third ellipsoid axis (or the ratio of K33/K if the K33OVERK option is specified); for an unrotated case, this is the vertical hydraulic conductivity.
 #When anisotropy is applied, K33 corresponds to the K33 tensor component. All included cells (IDOMAIN > 0) must have a K33 value greater than zero.
@@ -231,32 +294,20 @@ ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
 # When THICKSTRT is in effect, a negative value of icelltype indicates that saturated thickness will be computed as STRT-BOT and held constant.
 # Kh = 1.
 # Kv = 1.
-npf = flopy.mf6.ModflowGwfnpf(gwf, xt3doptions = False,
-                                  save_flows = True,
-                                  save_specific_discharge = True,
-                                  icelltype = 1,   # meaning that transmissivity changes with heads
-                                  k   = hk_lrc_list, 
-                                  k33 = vka_lrc_list)
+npf = flopy.mf6.ModflowGwfnpf(gwf,
+                              xt3doptions = False,
+                              save_flows = True,
+                              save_specific_discharge = True,
+                              icelltype = 1,   # meaning that transmissivity changes with heads
+                              k   = hk_lrc_list, 
+                              k33 = vka_lrc_list)
 
 sto = flopy.mf6.ModflowGwfsto(gwf, 
                               sy = sy, 
                               ss = ss, 
-                              iconvert=1
+                              iconvert = 1
                               )
 # # https://modflowpy.github.io/flopydoc/mflpf.html
-# lpf = flopy.modflow.ModflowLpf(mf, 
-#                                hk     = hk_lrc_list, 
-#                                vka    = vka_lrc_list, 
-#                                sy     = sy, 
-#                                ss     = ss, 
-#                                laytyp = laytyp_l_list, 
-#                                ipakcb = 53    ,
-#                                hdry   = +1e-30,
-#                                wetfct = 0.1   ,
-#                                iwetit = 3     ,
-#                                laywet = 1     ,
-#                                wetdry = -1    )
-#
 #%%
 # CZ220303 removed 'steps' to make it work
 oc = flopy.mf6.ModflowGwfoc(gwf,
@@ -272,23 +323,40 @@ oc = flopy.mf6.ModflowGwfoc(gwf,
 
 
 #%% recharge package
-rch_spd = []
+
 #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
 #list(set(t))
 # duplicate nodes exists in the intersect nodenumber, which needs to be removed
-for i in list(set(adpoly_intersect.nodenumber)) :
-    coord= gwf.modelgrid.get_lrc(i)
-    rch_spd.append([0, coord[0][1], coord[0][2], 0.1])
 
-rch_spd_2 = []
-for i in list(set(adpoly_intersect.nodenumber)) :
-    coord= gwf.modelgrid.get_lrc(i)
-    rch_spd_2.append([0, coord[0][1], coord[0][2], 0])
+rch_spd_dict = {}
+
+recharge_rate_spd_ay = np.zeros(nper,dtype=float)
+# during the first 100 days, the recharge rate is 0.1 m/day
+recharge_rate_spd_ay [stress_period_end_time_days_ay <= 100] = 0.1
+
+
+
+for per in np.arange(nper):
+    rch_spd = []
+    for i in list(set(adpoly_intersect.nodenumber)) :
+        coord= gwf.modelgrid.get_lrc(i)
+        rch_spd.append([0, coord[0][1], coord[0][2], recharge_rate_spd_ay[per]] )
+    rch_spd_dict[per] =  rch_spd
+
+
+
+# rch_spd_2 = []
+# for i in list(set(adpoly_intersect.nodenumber)) :
+#     coord= gwf.modelgrid.get_lrc(i)
+#     rch_spd_2.append([0, coord[0][1], coord[0][2], 0])
+
+
+
 
 rch = flopy.mf6.ModflowGwfrch(
     gwf, 
-    #stress_period_data = rch_spd
-    stress_period_data={0: rch_spd,1: rch_spd_2}
+    stress_period_data = rch_spd_dict
+    #stress_period_data={0: rch_spd,1: rch_spd_2}
 )
 
 
@@ -358,22 +426,21 @@ surface_elevation_cell_rl_ay_m = ztop_m - depth_cell_rl_ay_m
 
 from mpl_toolkits.mplot3d.axes3d import Axes3D, get_test_data
 from matplotlib import cm
-
+#get_ipython().run_line_magic('matplotlib', 'auto')  #allow the graph to pop out
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(1, 1, 1, projection='3d')
 
 # plot a 3D surface like in the example mplot3d/surface3d_demo
-
 surf = ax.plot_surface(gwf.modelgrid.xcellcenters, 
                        gwf.modelgrid.ycellcenters, 
                        surface_elevation_cell_rl_ay_m,
                        rstride=1, cstride=1, cmap=cm.coolwarm,
                        linewidth=0, antialiased=False)
-
 fig.colorbar(surf, shrink=0.5, aspect=10)
-
 dis.top = surface_elevation_cell_rl_ay_m
 
+
+#get_ipython().run_line_magic('matplotlib', 'inline')
 #%% create observation package
 obs = flopy.mf6.ModflowUtlobs(
     model=gwf , # groundwater flow package to be used
@@ -495,7 +562,7 @@ if not success:
 # %% Extracting data
 import flopy.utils.binaryfile as bf
 # Create the headfile and budget file objects
-headobj       =flopy.utils.HeadFile(os.path.join(ws,fModName+'.hds'))
+headobj       = flopy.utils.HeadFile(os.path.join(ws,fModName+'.hds'))
 times_headobj = headobj.get_times()
 cbcobj = flopy.utils.CellBudgetFile(os.path.join(ws,fModName+'.cbc'))
 times_cbcobj = cbcobj.get_times()
@@ -559,36 +626,6 @@ plt.colorbar(arr, shrink=1, ax=ax)
 ax.set_xlabel('X (m)')
 ax.set_ylabel('Z (m)')
        
-# %% extracting data from key locations
-# https://github.com/connorcleary/code/blob/9b4af7abfe097e03afffaa07af24d7744a080285/flopy/jupyter/flopy.ipynb
-
-# def get_lrc_from_coordinates(x,y,z,gwf=gwf) :
-#     """
-#     function to get the lrc of the coordinates. 
-#     """
-#     from flopy.utils.gridintersect import GridIntersect
-#     ix = GridIntersect(gwf.modelgrid, method='vertex')
-#     ix.intersects(
-#     [row,column]= dis.get_rc_from_node_coordinates(x,y)
-#     #layer = dis.get_layer(row,column,z)
-#     layer = 0
-#     return (layer, row , column)
-
-
-# # def extract_head_from_xyz(x,y,z,gwf=gwf):
-# #     result = {'x':x,'y':y,'z':z}
-# #     [result['r'] ,result['c']] =
-# #         gwf.modelgrid.get_coords(result['x'] ,result['y'])
-    
-    
-# point_1 = {'x':500,'y':5,'z':-15}
-# (point_1['l'],point_1['r'],point_1['c'] )= get_lrc_from_coordinates(
-#     point_1['x'],
-#     point_1['y'],
-#     point_1['z'])
-# point_1['head_time_ay']=np.array(
-#     [ i[point_1['l'],point_1['r'],point_1['c']] for i in head_array_timeid_lrc_m ])
-# point_1 ['label']= 'x={:1.1e}'.format(point_1['x']) +  ', z={:1.1e}'.format(point_1['z'])    
 
 # %% plot multiple graph to show changes in 
 t,ch,ch2 = np.genfromtxt(ws+r'/0', skip_header=1, delimiter=',').T
@@ -598,3 +635,8 @@ ax1.plot(t,ch2,'r.')
 ax1.set_xlabel('time [s]')
 ax1.set_ylabel('head[m]')
 plt.show()
+
+
+
+
+

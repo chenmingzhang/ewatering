@@ -144,6 +144,37 @@ chd=flopy.modflow.mfchd.ModflowChd(model=mf,stress_period_data=stress_period_dat
 c = plt.imshow(grndElv, cmap='jet')
 plt.colorbar(c);
 
-#%% 
-mf.modelgrid # this is the location where all vertices are stored
 
+
+
+
+# %% extracting data from key locations
+# https://github.com/connorcleary/code/blob/9b4af7abfe097e03afffaa07af24d7744a080285/flopy/jupyter/flopy.ipynb
+
+# def get_lrc_from_coordinates(x,y,z,gwf=gwf) :
+#     """
+#     function to get the lrc of the coordinates. 
+#     """
+#     from flopy.utils.gridintersect import GridIntersect
+#     ix = GridIntersect(gwf.modelgrid, method='vertex')
+#     ix.intersects(
+#     [row,column]= dis.get_rc_from_node_coordinates(x,y)
+#     #layer = dis.get_layer(row,column,z)
+#     layer = 0
+#     return (layer, row , column)
+
+
+# # def extract_head_from_xyz(x,y,z,gwf=gwf):
+# #     result = {'x':x,'y':y,'z':z}
+# #     [result['r'] ,result['c']] =
+# #         gwf.modelgrid.get_coords(result['x'] ,result['y'])
+    
+    
+# point_1 = {'x':500,'y':5,'z':-15}
+# (point_1['l'],point_1['r'],point_1['c'] )= get_lrc_from_coordinates(
+#     point_1['x'],
+#     point_1['y'],
+#     point_1['z'])
+# point_1['head_time_ay']=np.array(
+#     [ i[point_1['l'],point_1['r'],point_1['c']] for i in head_array_timeid_lrc_m ])
+# point_1 ['label']= 'x={:1.1e}'.format(point_1['x']) +  ', z={:1.1e}'.format(point_1['z'])    
