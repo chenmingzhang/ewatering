@@ -296,8 +296,7 @@ ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
 #:math:`>`0 means saturated thickness varies with computed head when head is below the cell top; 
 #:math:`<`0 means saturated thickness varies with computed head unless the THICKSTRT option is in effect. 
 # When THICKSTRT is in effect, a negative value of icelltype indicates that saturated thickness will be computed as STRT-BOT and held constant.
-# Kh = 1.
-# Kv = 1.
+# k22 is equal to k by default
 npf = flopy.mf6.ModflowGwfnpf(gwf,
                               xt3doptions = False,
                               save_flows = True,
@@ -564,7 +563,7 @@ if not success:
         raise Exception('MODFLOW did not terminate normalLy_m.')
 
 # %% Extracting data
-import flopy.utils.binaryfile as bf
+#import flopy.utils.binaryfile as bf
 # Create the headfile and budget file objects
 headobj       = flopy.utils.HeadFile(os.path.join(ws,fModName+'.hds'))
 times_headobj = headobj.get_times()
@@ -574,7 +573,14 @@ times_cbcobj = cbcobj.get_times()
 
 
 # %%
-times_output_list_day = [11, 101.0, 201, 301]
+# a list of times where the head distribution over time will be plotted.
+times_output_list_day = [11, 101.0, 150, 200]
+# find out the index of the head output (totim)
+# that is cloest to the listed time for 
+# plotting.  
+index_of_totim_output_list_day = \
+    [( abs(i-gwf.modeltime.totim) ).argmin() for i in times_output_list_day]
+
 fig = plt.figure(figsize=(8, 3))
 ax = fig.add_subplot(1, 1, 1)
 #modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Column': 5})  
@@ -600,7 +606,6 @@ ax  = fig.add_subplot(1, 1, 1)
 # grd = modeLx_msect.plot_grid()
 # ax.plot(gwf.modelgrid.xycenters[0] , head[-1,0,:], linewidth=5.0)
 # plt.colorbar(arr, shrink=1, ax=ax)
-
 times_head_ay = gwf.output.head().get_times()
 head = gwf.output.head().get_data(totim = times_head_ay[-1])
 times_bud_ay = gwf.output.head().get_times
@@ -642,9 +647,9 @@ time_array_obs_output_m, \
 #%% plot multiple graph to show changes of the results
 fig, axes = plt.subplots(
     ncols=2,
-    nrows=2,
+    nrows=3,
     sharex=False,
-    figsize=(8.3, 4.3),
+    figsize=(9.3, 6.3),
     constrained_layout=True,
 )
 
@@ -664,9 +669,6 @@ ax.plot(time_array_obs_output_m,
         hydrualic_head_SA2_time_array_m - strt_m,
         'b-',
         label='SA2 modelled')
-
-
-
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Pressure head[m]')
 ax.grid()
@@ -720,6 +722,40 @@ ax.set_ylim(-0.1,1)
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Water depth [m]')
 ax.legend(loc="upper right",fontsize=10)
+
+
+ax =  axes[2,1]
+modeLx_msect   = flopy.plot.PlotCrossSection(model=gwf, line={'Row': int(nrow/2) })
+patches        = modeLx_msect.plot_ibound()
+linecollection = modeLx_msect.plot_grid()
+t = ax.set_title('Head a Cross-Section')
+#head = headobj.get_data(totim=times_output_list_day[1])
+for i in index_of_totim_output_list_day :
+    head = gwf.output.head().get_data(totim = times_head_ay[i])
+    ax.plot(gwf.modelgrid.xycenters[0],
+            head[-1,int(nrow/2),:],
+            label ='day ' +str(times_head_ay[i]) 
+            )   
+ax.legend(loc="lower right",fontsize=10)
+
+
+
+ax = axes[2,0]
+ax.plot(stress_period_end_time_days_ay,
+        recharge_rate_spd_ay,
+        'ko',
+        label="measuched")
+# ax.plot(time_array_obs_output_m,
+#         hydrualic_head_SA2_time_array_m - strt_m,
+#         'r.',
+#         label='SA3 Measurement')
+ax.grid()
+#ax.set_ylim(-0.1,1)
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Recharge [m]')
+ax.legend(loc="upper right",fontsize=10)
+
+
 
 plt.show()
 
