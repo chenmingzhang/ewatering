@@ -50,6 +50,11 @@ model_ws = os.path.join('.', 'data')
 
 
 print('Model workspace is : {}'.format(os.getcwd()))
+
+#%% unit conversion
+mPmm = 0.001 # convert mm to m
+
+
 #%% model set_up
 Lx_m   = 300.    # from plot, y is plotted from left to right
 Ly_m   = 300.     # from plot, y is plotted upward
@@ -117,32 +122,17 @@ field_data_df['time_elapsed_days'] = (field_data_df.index - field_data_df.index[
 # this does not consider the impact of tmulti
 # CZ220311 if tdis has this array, we do not need to produce here anymore.
 # 
-for i in np.arange(nper):
-    time_ay_current_stress_period = np.linspace(0,perlen[i]-perlen[i]/nstp[i],nstp[i]) 
-    if i == 0: 
-        times_ay_days= time_ay_current_stress_period
-    else:
-        times_ay_days = np.concatenate((times_ay_days, 
-                                        times_ay_days[-1] + 
-                                        perlen[i-1]/nstp[i-1] + 
-                                        time_ay_current_stress_period
-                                        ))
-
-#%% cubic spline interpolating the surface water depth folloing the measurement
-
-from csaps import csaps
-ys = csaps(field_data_df['time_elapsed_days'], 
-           field_data_df['surface_water_depth_m'],
-           times_ay_days, 
-           smooth=0.85)
-
-#%%
-fig=plt.figure()
-#df.plot(field_data_df.index,field_data_df['surface_water_depth_m'])
-field_data_df.plot(x='time_elapsed_days',y='surface_water_depth_m')
-plt.plot(times_ay_days,ys,'o')
-#field_data = np.genfromtxt(field_data_ws, delimiter=',')
-
+# for i in np.arange(nper):
+#     time_ay_current_stress_period = np.linspace(0,perlen[i]-perlen[i]/nstp[i],nstp[i]) 
+#     if i == 0: 
+#         times_ay_days= time_ay_current_stress_period
+#     else:
+#         times_ay_days = np.concatenate((times_ay_days, 
+#                                         times_ay_days[-1] + 
+#                                         perlen[i-1]/nstp[i-1] + 
+#                                         time_ay_current_stress_period
+#                                         ))
+# replaced by gwf.modeltime.totim
 
 
 #%%
@@ -181,7 +171,20 @@ imsgwf = flopy.mf6.ModflowIms(sim, print_option='ALL',
                                   reordering_method='NONE',
                                   relaxation_factor=relax,
                                   filename='{}.ims'.format(fModName))
+#%% cubic spline interpolating the surface water depth folloing the measurement
 
+from csaps import csaps
+ys = csaps(field_data_df['time_elapsed_days'], 
+           field_data_df['surface_water_depth_m'],
+           gwf.modeltime.totim, 
+           smooth=0.85)
+
+#%%
+fig=plt.figure()
+#df.plot(field_data_df.index,field_data_df['surface_water_depth_m'])
+field_data_df.plot(x='time_elapsed_days',y='surface_water_depth_m')
+plt.plot(gwf.modeltime.totim,ys,'o')
+#field_data = np.genfromtxt(field_data_ws, delimiter=',')
 #%%
 
 idomain = np.full((nlay, nrow, ncol), 1) # similar to idomain where 0 means inactive cell, 1 means active cell
@@ -281,7 +284,8 @@ dis.idomain = idomain_lrc_list
 
 
 # interesting to see that the it is better to be converged, if the head is above zero 
-strt_lrc_list_m = -5. * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
+strt_m =-5 
+strt_lrc_list_m = strt_m * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
 ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
 
 
@@ -627,16 +631,102 @@ ax.set_xlabel('X (m)')
 ax.set_ylabel('Z (m)')
        
 
-# %% plot multiple graph to show changes in 
-t,ch,ch2 = np.genfromtxt(ws+r'/0', skip_header=1, delimiter=',').T
-f, ax1 = plt.subplots(1, 1)
-ax1.plot(t,ch,'k.')
-ax1.plot(t,ch2,'r.')
-ax1.set_xlabel('time [s]')
-ax1.set_ylabel('head[m]')
+# %% obtain observation data from model output
+time_array_obs_output_m, \
+    hydrualic_head_SA2_time_array_m, \
+    hydrualic_head_SA3_time_array_m = \
+    np.genfromtxt(ws+r'/0', 
+    skip_header=1, 
+    delimiter=',').T
+
+#%% plot multiple graph to show changes of the results
+fig, axes = plt.subplots(
+    ncols=2,
+    nrows=2,
+    sharex=False,
+    figsize=(8.3, 4.3),
+    constrained_layout=True,
+)
+
+title_str ='kh = {:1.1e}'.format(hk_mPday) + '_ nlay = {:1.1e}'.format(nlay) \
+    +'_ sy = {:1.1e}'.format(sy) \
+#    + '_ nstp = {:1.1e}'.format(nstp) 
+    
+fig.suptitle(title_str,fontsize=10)
+
+ax = axes[0,0]
+ax.plot(field_data_df['time_elapsed_days'],
+         field_data_df['sa2_watertable_rise_mm'] * mPmm,
+         'bo',
+         markevery=1000,
+         label="SA2 Field")
+ax.plot(time_array_obs_output_m,
+        hydrualic_head_SA2_time_array_m - strt_m,
+        'b-',
+        label='SA2 modelled')
+
+
+
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Pressure head[m]')
+ax.grid()
+ax.set_ylim(-0.1,3)
+ax.legend(loc="upper right",fontsize=10)
+
+ax = axes[0,1]
+ax.plot(field_data_df['time_elapsed_days'],
+        field_data_df['sa3_watertable_rise_mm'] * mPmm,
+        'ro',
+        markevery=1000,
+        label="SA3 Field")
+ax.plot(time_array_obs_output_m,
+        hydrualic_head_SA2_time_array_m - strt_m,
+        'r-',
+        label='SA3 modelled')
+ax.grid()
+ax.set_ylim(-0.1,3)
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Pressure head[m]')
+ax.legend(loc="upper right",fontsize=10)
+
+ax = axes[1,0]
+ax.plot(field_data_df['time_elapsed_days'],
+        field_data_df['sa1_watertable_rise_mm'] * mPmm,
+        'bo',
+        markevery=1000,
+        label="SA3 Field")
+# ax.plot(time_array_obs_output_m,
+#         hydrualic_head_SA2_time_array_m - strt_m,
+#         'r.',
+#         label='SA3 Measurement')
+ax.grid()
+ax.set_ylim(-0.1,3)
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Pressure head[m]')
+ax.legend(loc="upper right",fontsize=10)
+
+ax = axes[1,1]
+ax.plot(field_data_df['time_elapsed_days'],
+        field_data_df['surface_water_depth_m'],
+        'ko',
+        markevery=1000,
+        label="measured")
+# ax.plot(time_array_obs_output_m,
+#         hydrualic_head_SA2_time_array_m - strt_m,
+#         'r.',
+#         label='SA3 Measurement')
+ax.grid()
+ax.set_ylim(-0.1,1)
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Water depth [m]')
+ax.legend(loc="upper right",fontsize=10)
+
 plt.show()
 
 
-
+fname_save=title_str.replace(';', ' ').replace('+', '').replace('e-', 'ne') \
+    .replace('=', '_').replace(' ', '')
+print(fname_save)
+plt.savefig(fname_save+'.png',dpi=300)
 
 
