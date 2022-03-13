@@ -174,17 +174,21 @@ imsgwf = flopy.mf6.ModflowIms(sim, print_option='ALL',
 #%% cubic spline interpolating the surface water depth folloing the measurement
 
 from csaps import csaps
-ys = csaps(field_data_df['time_elapsed_days'], 
+csaps_coef = 0.85
+surface_water_depth_rch_input_totim_ay_m = csaps(field_data_df['time_elapsed_days'], 
            field_data_df['surface_water_depth_m'],
            gwf.modeltime.totim, 
-           smooth=0.85)
+           smooth = csaps_coef)
 
 #%%
 fig=plt.figure()
-#df.plot(field_data_df.index,field_data_df['surface_water_depth_m'])
-field_data_df.plot(x='time_elapsed_days',y='surface_water_depth_m')
-plt.plot(gwf.modeltime.totim,ys,'o')
-#field_data = np.genfromtxt(field_data_ws, delimiter=',')
+
+ax=field_data_df.plot(x = 'time_elapsed_days',
+                   y = 'surface_water_depth_m')
+plt.plot(gwf.modeltime.totim,
+         surface_water_depth_rch_input_totim_ay_m,
+         'o')
+ax.set_title('interpolate surface water depth for recharge input, coef = ' + str(csaps_coef) )
 #%%
 
 idomain = np.full((nlay, nrow, ncol), 1) # similar to idomain where 0 means inactive cell, 1 means active cell
@@ -335,7 +339,15 @@ rch_spd_dict = {}
 
 recharge_rate_spd_ay = np.zeros(nper,dtype=float)
 # during the first 100 days, the recharge rate is 0.1 m/day
-recharge_rate_spd_ay [stress_period_end_time_days_ay <= 100] = 0.1
+recharge_rate_spd_ay [ stress_period_end_time_days_ay <= 100 ] = 0.1
+
+# list of variables used for calculating recharge at each cells
+# surface_water_depth_rch_input_totim_ay_m
+# gwf.modeltime.totim
+# gwf.modelgrid.xcellcenters
+# gwf.modelgrid.ycellcenters
+# surface_elevation_cell_rl_ay_m
+
 
 
 
@@ -347,19 +359,9 @@ for per in np.arange(nper):
     rch_spd_dict[per] =  rch_spd
 
 
-
-# rch_spd_2 = []
-# for i in list(set(adpoly_intersect.nodenumber)) :
-#     coord= gwf.modelgrid.get_lrc(i)
-#     rch_spd_2.append([0, coord[0][1], coord[0][2], 0])
-
-
-
-
 rch = flopy.mf6.ModflowGwfrch(
     gwf, 
     stress_period_data = rch_spd_dict
-    #stress_period_data={0: rch_spd,1: rch_spd_2}
 )
 
 
@@ -390,7 +392,11 @@ from shapely.geometry import Point
 ix = GridIntersect(gwf.modelgrid, method='vertex') # CZ220310 if the point is at the grid, both cells will be included.
 
 point_centre_pond = Point(150.1,150.1)
-obs_id = ix.intersects(point_centre_pond)
+point_centre_pond.id = ix.intersects(point_centre_pond)
+point_centre_pond.lrc_loc = (0, 
+                             point_centre_pond.id['cellids'][0][0], 
+                             point_centre_pond.id['cellids'][0][1])  # (layerid, rowid, columnid)
+
 # importing obs id
 #obs_wells = r".\objects\obs_wells.csv"
 #bs_vertices = np.genfromtxt(obs_wells, skip_header = 1, delimiter = ',')
@@ -399,11 +405,17 @@ obs_id = ix.intersects(point_centre_pond)
 #obs_id = ix.intersects(Point(obs_vertices[0], obs_vertices[1]))
 #obs_id
 
-obs_loc = (0, obs_id['cellids'][0][0], obs_id['cellids'][0][1])  # (layerid, rowid, columnid)
-obs_id_2 = ix.intersects(Point(200.1,150.1))
-obs_loc_2 = (0, obs_id_2['cellids'][0][0], obs_id_2['cellids'][0][1])  # (layerid, rowid, columnid)
+point_SA3 = Point (Point(240.1,150.1) )
+point_SA3.cell_id = ix.intersects(point_SA3)
+point_SA3.lrc_loc = (0, 
+                     point_SA3.cell_id['cellids'][0][0], 
+                     point_SA3.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
 
-
+point_SA4 = Point (Point(280.1,150.1) )
+point_SA4.cell_id = ix.intersects(point_SA4)
+point_SA4.lrc_loc = (0, 
+                     point_SA4.cell_id['cellids'][0][0], 
+                     point_SA4.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
 
 # dist_to_pond_centre_xy_ay_m = np.zeros([nrow,ncol],dtype=float)
 
@@ -432,7 +444,7 @@ from matplotlib import cm
 #get_ipython().run_line_magic('matplotlib', 'auto')  #allow the graph to pop out
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(1, 1, 1, projection='3d')
-
+ax.set_title('3-D view of surface elevation')
 # plot a 3D surface like in the example mplot3d/surface3d_demo
 surf = ax.plot_surface(gwf.modelgrid.xcellcenters, 
                        gwf.modelgrid.ycellcenters, 
@@ -446,11 +458,13 @@ dis.top = surface_elevation_cell_rl_ay_m
 #get_ipython().run_line_magic('matplotlib', 'inline')
 #%% create observation package
 obs = flopy.mf6.ModflowUtlobs(
-    model=gwf , # groundwater flow package to be used
-    digits=10, # default digits to print out
-    print_input=True, 
-    #continuous= (['head_obs', 'HEAD', obs_loc],['head_obs2', 'HEAD', obs_loc_2]) , # obsname, obstype, id
-    continuous= [['head_obs', 'HEAD', obs_loc],['head_obs2', 'HEAD', obs_loc_2]],
+    model  = gwf , # groundwater flow package to be used
+    digits = 10, # default digits to print out
+    print_input = True, 
+    continuous= [['head_SA2', 'HEAD', point_centre_pond.lrc_loc],
+                 ['head_SA3', 'HEAD', point_SA3.lrc_loc ],
+                 ['head_SA4', 'HEAD', point_SA4.lrc_loc ]
+                 ],
     pname = 'obs',
     filename='{}.obs'.format(fModName)
 )
@@ -541,6 +555,11 @@ mm = flopy.plot.PlotMapView(model=gwf)
 rch_ = mm.plot_bc("RCH")
 chd_ = mm.plot_bc("CHD")
 #obs_ = mm.plot_bc("OBS")
+
+plt.plot(point_SA3.x,point_SA3.y,'ro',markersize=20)
+plt.plot(point_centre_pond.x,point_centre_pond.y,'bo',markersize=20)
+plt.plot(point_SA4.x,point_SA4.y,'go',markersize=20)
+
 mm.plot_grid()
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
@@ -637,9 +656,11 @@ ax.set_ylabel('Z (m)')
        
 
 # %% obtain observation data from model output
+# this may be replaced by pandas
 time_array_obs_output_m, \
     hydrualic_head_SA2_time_array_m, \
-    hydrualic_head_SA3_time_array_m = \
+    hydrualic_head_SA3_time_array_m, \
+    hydrualic_head_SA4_time_array_m = \
     np.genfromtxt(ws+r'/0', 
     skip_header=1, 
     delimiter=',').T
@@ -682,7 +703,7 @@ ax.plot(field_data_df['time_elapsed_days'],
         markevery=1000,
         label="SA3 Field")
 ax.plot(time_array_obs_output_m,
-        hydrualic_head_SA2_time_array_m - strt_m,
+        hydrualic_head_SA3_time_array_m - strt_m,
         'r-',
         label='SA3 modelled')
 ax.grid()
@@ -692,11 +713,15 @@ ax.set_ylabel('Pressure head[m]')
 ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[1,0]
+ax.plot(time_array_obs_output_m,
+        hydrualic_head_SA4_time_array_m - strt_m,
+        'r-',
+        label='SA4 modelled')
 ax.plot(field_data_df['time_elapsed_days'],
         field_data_df['sa1_watertable_rise_mm'] * mPmm,
         'bo',
         markevery=1000,
-        label="SA3 Field")
+        label="SA4 Field")
 # ax.plot(time_array_obs_output_m,
 #         hydrualic_head_SA2_time_array_m - strt_m,
 #         'r.',
@@ -725,7 +750,8 @@ ax.legend(loc="upper right",fontsize=10)
 
 
 ax =  axes[2,1]
-modeLx_msect   = flopy.plot.PlotCrossSection(model=gwf, line={'Row': int(nrow/2) })
+modeLx_msect   = flopy.plot.PlotCrossSection(model=gwf, 
+                                             line={'Row': int(nrow/2) })
 patches        = modeLx_msect.plot_ibound()
 linecollection = modeLx_msect.plot_grid()
 t = ax.set_title('Head a Cross-Section')
