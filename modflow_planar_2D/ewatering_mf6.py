@@ -14,9 +14,6 @@ pip install -U csaps
 
 import os
 import sys
-import glob
-import platform
-import shutil
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -39,7 +36,6 @@ print('pandas version: {}'.format(pd.__version__))
 print('flopy version: {}'.format(flopy.__version__))
 
 # parameters for plotting
-import matplotlib.pylab as pylab
 params = {'legend.fontsize': 'x-large',
           'figure.figsize': (15, 5),
          'axes.labelsize': 'x-large',
@@ -78,7 +74,7 @@ vertices_elev_layer_l_list_m = np.linspace(ztop_m, zbot_m, nlay + 1)  # layer el
 # bool_steady_state_stress_period = [False, False]     # if the results needs to be in steady state
 
 #last for 200 days, using 200 stress period, each stress period has one day
-nper = 200
+nper = 350
 perlen = np.ones(nper)
 nstp   = np.ones(nper,dtype=int)
 tsmult = np.ones(nper)
@@ -144,13 +140,11 @@ sim = flopy.mf6.MFSimulation(sim_name=modelname,
 #                             exe_name='../Exe/mf6',  #comment this line means flopy will look for mf6 from system folders
                              sim_ws=ws)
 
-
 tdis = flopy.mf6.ModflowTdis(sim, 
                              time_units='DAYS',
                              nper=nper, 
                              perioddata=dis_perioddata_ay
                             )
-
 #%% dis
 fModName = 'FlowModel'
 gwf = flopy.mf6.ModflowGwf(sim, 
@@ -182,7 +176,6 @@ surface_water_depth_rch_input_totim_ay_m = csaps(field_data_df['time_elapsed_day
 
 #%%
 fig=plt.figure()
-
 ax=field_data_df.plot(x = 'time_elapsed_days',
                    y = 'surface_water_depth_m')
 plt.plot(gwf.modeltime.totim,
@@ -226,72 +219,73 @@ print('Gridgen workspace is : {}'.format(gridgen_ws))
 
 #%%  define a circle in the middle
 coordinate_centre_circle_xy_m =  (Lx_m/2.0,Ly_m/2.0)
-radius_circle_m   = 100
+radius_circle_m   = 100.
 
 poly_circle_xy_list=[[[]]]
 
-for i in np.arange(0, 2*np.pi, np.pi/30):
-    
+for i in np.arange(0., 2.*np.pi, np.pi/30.):
     poly_circle_xy_list[0][0].append((coordinate_centre_circle_xy_m[0] + 
                                       radius_circle_m * np.cos(i),
                                       coordinate_centre_circle_xy_m[1] + 
                                       radius_circle_m * np.sin(i)
                                       ))
     
-# the below line is needed as the fist and final point needs to be exactly (meaning 5~=4.999999999) the same.
+# the below line is needed as the fist and final point needs 
+# to be exactly (meaning 5~=4.999999999) the same.
 poly_circle_xy_list[0][0].append(poly_circle_xy_list[0][0][0])
 
 g = Gridgen(dis, model_ws=gridgen_ws)
 g.build()
 
-#gridgen_ws = os.path.join(model_ws, 'gridgen')
-
 adshp = os.path.join(gridgen_ws, 'ad0')
 
 
-adline = [[[(0,0),(Lx_m,0),(Lx_m,Ly_m),(0,Ly_m),(0,0)]]]
-# g.add_active_domain(adpoly, range(nlay))
+adline_chd = [[[(0,0),(Lx_m,0),(Lx_m,Ly_m),(0,Ly_m),(0,0)]]]
+# g.add_active_domain(adpoly_lake, range(nlay))
 
-adpoly_intersect = g.intersect(poly_circle_xy_list, 'polygon', 0)  # the number at the third argument refers to the layers.
-adline_intersect = g.intersect(adline,'line',0)
-#adpoly_intersect = g.intersect(poly_circle_xy_list, 'polygon', 1)
-print(adpoly_intersect.dtype.names)
-print(adpoly_intersect)
-print(adpoly_intersect.nodenumber)
-print(adline_intersect.nodenumber)
+# the number at the third argument refers to the layers.
+adpoly_lake_intersect = g.intersect(poly_circle_xy_list, 
+                                    'polygon', 
+                                    0)  
 
-#g.add_refinement_features(poly_circle_xy_list, 'polygon', 1, range(nlay))
+adline_chd_intersect = g.intersect(adline_chd,
+                               'line',
+                               0)
 
+# CZ220315 still not successful to get point from gridgen.intersect
+#  flopy.utils.gridintersect.gridintersect.intersects works well for points
+# point_intersect =  g.intersect([[[(150.1,150.1)]]],
+#                                'point',
+#                                0)
+
+#adpoly_lake_intersect = g.intersect(poly_circle_xy_list, 'polygon', 1)
+print(adpoly_lake_intersect.dtype.names)
+print(adpoly_lake_intersect)
+print(adpoly_lake_intersect.nodenumber)
+print(adline_chd_intersect.nodenumber)
 
 idomain_1d_list = np.zeros((ncol*nrow), dtype=int) + 3  # active cell
 rf2shp = os.path.join(gridgen_ws, 'rf0')
 #rf2shp = os.path.join(gridgen_ws, 'rf2')
 #%%  plot idomain
-#a[adpoly_intersect.nodenumber] = 2
+#a[adpoly_lake_intersect.nodenumber] = 2
 idomain_rch = 2  # all the idomains that will be subjected to recharge will be tagged with 2.
 idomain_constant_head = 5 # chd
-idomain_1d_list[adpoly_intersect.nodenumber]  = idomain_rch
-idomain_1d_list[adline_intersect.nodenumber]  = idomain_constant_head
+idomain_1d_list[adpoly_lake_intersect.nodenumber] = idomain_rch
+idomain_1d_list[adline_chd_intersect.nodenumber]  = idomain_constant_head
 idomain_lrc_list = idomain_1d_list.reshape(nlay,nrow,ncol)
 dis.idomain = idomain_lrc_list
 
 
-#ax.colorbar(shrink=0.5, ax=ax)
-#plt.colorbar(cax=ax)
-#cbar=plt.colorbar(arr, shrink=0.8, ax=ax)
-#cbar.ax.tick_params(labelsize=30)
-#quadmesh = mf.plot_idomain() 
-#flopy.plot.plot_shapefile(rf2shp, ax=ax, facecolor='yellow', alpha=0.25)
-
-
-#%% the idomain will be defined different this time where we start with 1-D array and later move to 3-D
-
-
-# interesting to see that the it is better to be converged, if the head is above zero 
-strt_m =-5 
-strt_lrc_list_m = strt_m * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
-ic = flopy.mf6.ModflowGwfic(gwf, strt = strt_lrc_list_m)
-
+#%% 
+# interesting to find that the it is better to be converged, 
+# when the head is above zero 
+strt_m = -5 
+strt_lrc_list_m = strt_m * \
+    np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
+    
+ic = flopy.mf6.ModflowGwfic(gwf, 
+                            strt = strt_lrc_list_m)
 
 #%% #k33 ([double]) –
 #k33 (double) is the hydraulic conductivity of the third ellipsoid axis (or the ratio of K33/K if the K33OVERK option is specified); for an unrotated case, this is the vertical hydraulic conductivity.
@@ -308,7 +302,12 @@ npf = flopy.mf6.ModflowGwfnpf(gwf,
                               icelltype = 1,   # meaning that transmissivity changes with heads
                               k   = hk_lrc_list, 
                               k33 = vka_lrc_list)
-
+# iconvert (integer) is a flag for each cell that specifies 
+# whether or not a cell is convertible for the storage 
+# calculation. 0 indicates confined storage is used. 
+# :math:`>`0 indicates confined storage is used when head is 
+# above cell top and a mixed formulation of unconfined and 
+# confined storage is used when head is below cell top.
 sto = flopy.mf6.ModflowGwfsto(gwf, 
                               sy = sy, 
                               ss = ss, 
@@ -318,51 +317,16 @@ sto = flopy.mf6.ModflowGwfsto(gwf,
 #%%
 # CZ220303 removed 'steps' to make it work
 oc = flopy.mf6.ModflowGwfoc(gwf,
-                            budget_filerecord ='{}.cbc'.format(fModName),
-                            head_filerecord   ='{}.hds'.format(fModName),
-                            headprintrecord   =[
+                   budget_filerecord ='{}.cbc'.format(fModName),
+                   head_filerecord   ='{}.hds'.format(fModName),
+                   headprintrecord   =[
                                 ('COLUMNS', 10, 'WIDTH', 15,
                                  'DIGITS', 6, 'GENERAL')],
-                            saverecord=[('HEAD', 'ALL'),
-                                        ('BUDGET', 'ALL')],
-                            printrecord=[('HEAD', 'LAST'),
-                                         ('BUDGET', 'LAST')])
+                   saverecord=[('HEAD', 'ALL'),
+                               ('BUDGET', 'ALL')],
+                   printrecord=[('HEAD', 'LAST'),
+                                ('BUDGET', 'LAST')])
 
-
-#%% recharge package
-
-#https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
-#list(set(t))
-# duplicate nodes exists in the intersect nodenumber, which needs to be removed
-
-rch_spd_dict = {}
-
-recharge_rate_spd_ay = np.zeros(nper,dtype=float)
-# during the first 100 days, the recharge rate is 0.1 m/day
-recharge_rate_spd_ay [ stress_period_end_time_days_ay <= 100 ] = 0.1
-
-# list of variables used for calculating recharge at each cells
-# surface_water_depth_rch_input_totim_ay_m
-# gwf.modeltime.totim
-# gwf.modelgrid.xcellcenters
-# gwf.modelgrid.ycellcenters
-# surface_elevation_cell_rl_ay_m
-
-
-
-
-for per in np.arange(nper):
-    rch_spd = []
-    for i in list(set(adpoly_intersect.nodenumber)) :
-        coord= gwf.modelgrid.get_lrc(i)
-        rch_spd.append([0, coord[0][1], coord[0][2], recharge_rate_spd_ay[per]] )
-    rch_spd_dict[per] =  rch_spd
-
-
-rch = flopy.mf6.ModflowGwfrch(
-    gwf, 
-    stress_period_data = rch_spd_dict
-)
 
 
 
@@ -370,7 +334,7 @@ rch = flopy.mf6.ModflowGwfrch(
 chd_spd = []
 
 boundary_constant_head_m= -5
-for i in list(set(adline_intersect.nodenumber)):
+for i in list(set(adline_chd_intersect.nodenumber)):
     coord= gwf.modelgrid.get_lrc(i)
     chd_spd.append(  [ (0 , coord[0][1], coord[0][2]) , 
                       boundary_constant_head_m  ] )
@@ -425,21 +389,20 @@ point_SA4.lrc_loc = (0,
 # pond bed slope in tangent value.
 pond_bed_slope_tan = 0.003  # np.tan(.5*np.pi/180) np.arctan(0.003)/np.pi*180
 
-dist_to_pond_centre_cell_rl_ay_m = (( gwf.modelgrid.xcellcenters - point_centre_pond.x ) ** 2. + \
+dist_to_pond_centre_cell_rc_ay_m = (( gwf.modelgrid.xcellcenters - point_centre_pond.x ) ** 2. + \
                                    ( gwf.modelgrid.ycellcenters - point_centre_pond.y ) ** 2. ) \
                                    ** 0.5
 
 max_depth_m = radius_circle_m * pond_bed_slope_tan
 
-depth_cell_rl_ay_m = max_depth_m - dist_to_pond_centre_cell_rl_ay_m * pond_bed_slope_tan
+depth_cell_rc_ay_m = max_depth_m - dist_to_pond_centre_cell_rc_ay_m * pond_bed_slope_tan
 
-depth_cell_rl_ay_m [depth_cell_rl_ay_m <  0] =0
+depth_cell_rc_ay_m [depth_cell_rc_ay_m <  0] =0
 
-surface_elevation_cell_rl_ay_m = ztop_m - depth_cell_rl_ay_m
+surface_elevation_cell_rc_ay_m = ztop_m - depth_cell_rc_ay_m
 
 
 
-from mpl_toolkits.mplot3d.axes3d import Axes3D, get_test_data
 from matplotlib import cm
 #get_ipython().run_line_magic('matplotlib', 'auto')  #allow the graph to pop out
 fig = plt.figure(figsize=plt.figaspect(0.5))
@@ -448,26 +411,159 @@ ax.set_title('3-D view of surface elevation')
 # plot a 3D surface like in the example mplot3d/surface3d_demo
 surf = ax.plot_surface(gwf.modelgrid.xcellcenters, 
                        gwf.modelgrid.ycellcenters, 
-                       surface_elevation_cell_rl_ay_m,
+                       surface_elevation_cell_rc_ay_m,
                        rstride=1, cstride=1, cmap=cm.coolwarm,
                        linewidth=0, antialiased=False)
 fig.colorbar(surf, shrink=0.5, aspect=10)
-dis.top = surface_elevation_cell_rl_ay_m
+dis.top = surface_elevation_cell_rc_ay_m
+
+
+
 
 
 #get_ipython().run_line_magic('matplotlib', 'inline')
+
+
+
+#%% rch package recharge package
+
+# https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
+# list(set(t))
+# duplicate nodes exists in the intersect nodenumber, 
+# which needs to be removed
+
+# # METHOD 1: a constant recharge is applied throughout the domain
+# rch_spd_dict = {}
+# recharge_rate_spd_ay = np.zeros(nper,dtype=float)
+# # during the first 100 days, the recharge rate is 0.1 m/day
+# recharge_rate_spd_ay [ stress_period_end_time_days_ay <= 100 ] \
+#     = 0.1
+# for per in np.arange(nper):
+#     rch_spd = []
+#     for i in list(set(adpoly_lake_intersect.nodenumber)) :
+#         coord= gwf.modelgrid.get_lrc(i)
+#         rch_spd.append([0, 
+#                         coord[0][1], 
+#                         coord[0][2], 
+#                         recharge_rate_spd_ay[per]] )
+#     rch_spd_dict[per] =  rch_spd
+
+
+# METHOD 2 RECHARGE BASED ON THE SURFACE WATER DEPTH
+# this method assumes the hydraulic conductivity across the unsat
+# zone is constant, the rise of water table due to recharge does 
+# not affect significantly the thickness of the unsat zone.
+
+# list of variables used for calculating recharge at each cells
+# surface_water_depth_rch_input_totim_ay_m
+# gwf.modeltime.totim
+# gwf.modelgrid.xcellcenters
+# gwf.modelgrid.ycellcenters
+# surface_elevation_cell_rc_ay_m
+# point_centre_pond.xy or .x .y
+# point_centre_pond.lrc_loc
+# point_SA3.cell_id   (9,16)
+
+
+rch_spd_dict = {}
+surface_elevation_centre_pond_m = surface_elevation_cell_rc_ay_m[  point_centre_pond.lrc_loc[1], point_centre_pond.lrc_loc[2]]
+
+depth_unsat_zone_m  = 5.0
+kz_unsat_zone_mPday =  0.00864 * 5  # 1e-14 * 5 * 9800000 * 86400
+adpoly_lake_intersect.nodenumber_nonreapeating = list(set(adpoly_lake_intersect.nodenumber))
+
+for per in np.arange(nper):
+    rch_spd = []
+    for i in  adpoly_lake_intersect.nodenumber_nonreapeating :
+        lrc_lake_point = gwf.modelgrid.get_lrc(i)
+        surface_elevation_lake_point_m = surface_elevation_cell_rc_ay_m[  lrc_lake_point[0][1], lrc_lake_point[0][2] ]
+        delta_z_m = surface_elevation_lake_point_m - surface_elevation_centre_pond_m   # tends to be a positive value as lake centre is a rather low point.
+        water_depth_lake_point_m = surface_water_depth_rch_input_totim_ay_m[per] - delta_z_m
+        if water_depth_lake_point_m < 0.01 : 
+            recharge_rate_mPday = 0
+        else:
+            recharge_rate_mPday = kz_unsat_zone_mPday * \
+                (depth_unsat_zone_m + water_depth_lake_point_m) / depth_unsat_zone_m
+
+        rch_spd.append([0, 
+                        lrc_lake_point[0][1], 
+                        lrc_lake_point[0][2], 
+                        recharge_rate_mPday
+                        ])
+    rch_spd_dict[per] =  rch_spd
+
+
+# https://github.com/MODFLOW-USGS/modflow6-examples/blob/7de506bb5fdaf4052a0cc33675bbb54457f20d61/scripts/ex-gwf-advtidal.py
+# an example to output recharge to a file.
+rch = flopy.mf6.ModflowGwfrch(
+    gwf, 
+    stress_period_data = rch_spd_dict,
+    pname='rch',   #"RCH-ZONE_{}".format(5),
+    #filename="{}.rch{}".format(modelname, 5),  # this only gives an alternatve place to save rch files
+)
+
+
+# # plot to check the result of the recharge
+# fig = plt.figure(figsize=(12, 9))
+# ax  = fig.add_subplot(1, 1, 1, aspect="equal")
+
+# a = [ rch_spd_dict[i][0][9][10] for i in np.arange(nper) ]
+
+# for rch_spd_dict the indexes are [stresperiod][ index in adpoly_lake_intersect.nodenumber_nonreapeating ][1-layer, 2-row, 3- column 4-rechargerate]
+
+
+
 #%% create observation package
 obs = flopy.mf6.ModflowUtlobs(
     model  = gwf , # groundwater flow package to be used
     digits = 10, # default digits to print out
     print_input = True, 
-    continuous= [['head_SA2', 'HEAD', point_centre_pond.lrc_loc],
-                 ['head_SA3', 'HEAD', point_SA3.lrc_loc ],
-                 ['head_SA4', 'HEAD', point_SA4.lrc_loc ]
-                 ],
+    continuous= {'{}.obs.csv'.format(fModName):
+                 [['head_SA2', 'HEAD', point_centre_pond.lrc_loc],
+                  ['head_SA3', 'HEAD', point_SA3.lrc_loc ],
+                  ['head_SA4', 'HEAD', point_SA4.lrc_loc ],
+                  ],
+                 
+                 },
     pname = 'obs',
     filename='{}.obs'.format(fModName)
-)
+    )
+
+# https://github.com/langevin-usgs/gw3099_classrepo/blob/d965f76fe707ad1178e0aef8c4d2db6c17538ef1/exercises/MODFLOW6/ex06-completed.ipynb
+# CZ220315 tried to run thiswrong message occured.
+
+# https://github.com/langevin-usgs/mf6flopy2019_classrepo/blob/a92ab4334eb7e63b8834e0dce3b968113f32af06/exercises/MODFLOW6/ex08-completed.ipynb
+# CZ220315 it is a beautiful example and i should follow
+# lak.obs.initialize(filename=lakobsname, continuous={'ex07.lak.obs.csv': lak_obs})
+
+fname_rch_obs_out = '{}.rch.obs.csv'.format(fModName)
+rch.obs.initialize(filename= '{}.rch.obs'.format(fModName) ,
+                   digits = 7,
+                   continuous= {fname_rch_obs_out: 
+                                [['rch_SA2', 'RCH', point_centre_pond.lrc_loc],
+                                 ['rch_SA3', 'RCH', point_SA3.lrc_loc ]
+                                 ]} ,
+                   )
+# rch_o = gwf.get_package('RCH')
+# rch_o.stress_period_data.get_data(key=0)
+
+
+
+# rch_obs = flopy.mf6.ModflowUtlobs(
+#     model  = gwf , # groundwater flow package to be used
+#     parent_file = rch ,
+#     continuous= {'aa_out':['rch_SA2', 'RCH', point_centre_pond.lrc_loc ] } ,
+#     filename = 'obs_2.obs',
+#     pname = 'obs_2'
+# )
+
+
+# add river observations
+# rivobsname = 'ex06.riv.obs'
+# riv.obs_filerecord.set_data([rivobsname])
+# riv_obs = [('RIVER-1', 'RIV', 'seg1'), ('RIVER-2', 'RIV', 'seg2'), 
+#            ('RIVER-3', 'RIV', 'seg3'), ('RIVER-4', 'RIV', 'seg4')]
+# rivobs = flopy.mf6.ModflowUtlobs(gwf, continuous={'ex06.riv.obs.csv': riv_obs}, parent_file=riv, fname=rivobsname)
 
 
 # find the cell which is intersected by the well
@@ -502,28 +598,6 @@ obs = flopy.mf6.ModflowUtlobs(
 # 3: Recharge to highest active cell (default is 3).
 #nrchop = 1
 
-
-# rch=flopy.modflow.ModflowRch(mf,
-#                              rech   = recharge_rate_mPday,
-#                              nrchop = nrchop,
-#                              ipakcb = 1,
-#                              stress_period_data   = {'0': adpoly_intersect.nodenumber , 
-#                                        '1': adpoly_intersect.nodenumber}
-#                              )
-# rch = flopy.mf6.ModflowGwfrcha(
-#     gwf, 
-#     recharge   = 0.1,
-#     #nrchop = 1
-#     )
-
-
-# rch_spd = [[None]]*(N**2-inactive_cells.size)
-# count = 0
-# for i in range(N):
-#     for j in range(N):
-#         if idomain[0, i, j] == idomain_rch:
-#             rch_spd[count] = [0, i, j, 0.01, 0, 'rch_rain']
-#             count += 1
 
 
 #%% plot grid and idomain to show results plot the vertical view of the model
@@ -567,7 +641,6 @@ ax.set_xlabel('X (m)', fontsize=40)
 ax.set_ylabel('Y (m)', fontsize=40)
 ax.set_title('IDOMAIN', fontsize=50)
 #%%
-#gwf.write_input()
 sim.write_simulation(silent=False)
 
 # %% Run the model
@@ -657,13 +730,21 @@ ax.set_ylabel('Z (m)')
 
 # %% obtain observation data from model output
 # this may be replaced by pandas
-time_array_obs_output_m, \
+time_array_obs_output_day, \
     hydrualic_head_SA2_time_array_m, \
     hydrualic_head_SA3_time_array_m, \
     hydrualic_head_SA4_time_array_m = \
-    np.genfromtxt(ws+r'/0', 
+    np.genfromtxt(os.path.join(ws,'{}.obs.csv'.format(fModName)), 
     skip_header=1, 
     delimiter=',').T
+
+time_array_rch_obs_output_day, \
+    recharge_SA2_time_array_mPday, \
+    recharge_SA3_time_array_mPday = \
+    np.genfromtxt(os.path.join(ws,fname_rch_obs_out), 
+    skip_header=1, 
+    delimiter=',').T
+
 
 #%% plot multiple graph to show changes of the results
 fig, axes = plt.subplots(
@@ -686,7 +767,7 @@ ax.plot(field_data_df['time_elapsed_days'],
          'bo',
          markevery=1000,
          label="SA2 Field")
-ax.plot(time_array_obs_output_m,
+ax.plot(time_array_obs_output_day,
         hydrualic_head_SA2_time_array_m - strt_m,
         'b-',
         label='SA2 modelled')
@@ -702,7 +783,7 @@ ax.plot(field_data_df['time_elapsed_days'],
         'ro',
         markevery=1000,
         label="SA3 Field")
-ax.plot(time_array_obs_output_m,
+ax.plot(time_array_obs_output_day,
         hydrualic_head_SA3_time_array_m - strt_m,
         'r-',
         label='SA3 modelled')
@@ -713,7 +794,7 @@ ax.set_ylabel('Pressure head[m]')
 ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[1,0]
-ax.plot(time_array_obs_output_m,
+ax.plot(time_array_obs_output_day,
         hydrualic_head_SA4_time_array_m - strt_m,
         'r-',
         label='SA4 modelled')
@@ -722,7 +803,7 @@ ax.plot(field_data_df['time_elapsed_days'],
         'bo',
         markevery=1000,
         label="SA4 Field")
-# ax.plot(time_array_obs_output_m,
+# ax.plot(time_array_obs_output_day,
 #         hydrualic_head_SA2_time_array_m - strt_m,
 #         'r.',
 #         label='SA3 Measurement')
@@ -738,7 +819,7 @@ ax.plot(field_data_df['time_elapsed_days'],
         'ko',
         markevery=1000,
         label="measured")
-# ax.plot(time_array_obs_output_m,
+# ax.plot(time_array_obs_output_day,
 #         hydrualic_head_SA2_time_array_m - strt_m,
 #         'r.',
 #         label='SA3 Measurement')
@@ -746,6 +827,27 @@ ax.grid()
 ax.set_ylim(-0.1,1)
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Water depth [m]')
+ax.legend(loc="upper right",fontsize=10)
+
+
+ax = axes[2,0]
+ax.plot(time_array_rch_obs_output_day,
+        recharge_SA2_time_array_mPday,
+        'r-',
+        label='SA2 recharge')
+ax.plot(time_array_rch_obs_output_day,
+        recharge_SA3_time_array_mPday,
+        'b-',
+        #markevery=1000,
+        label="SA3 recharge")
+# ax.plot(time_array_obs_output_day,
+#         hydrualic_head_SA2_time_array_m - strt_m,
+#         'r.',
+#         label='SA3 Measurement')
+ax.grid()
+#ax.set_ylim(-0.1,3)
+ax.set_xlabel('Time [s]')
+ax.set_ylabel('Recharge rate [m/day]')
 ax.legend(loc="upper right",fontsize=10)
 
 
@@ -766,12 +868,12 @@ ax.legend(loc="lower right",fontsize=10)
 
 
 
-ax = axes[2,0]
-ax.plot(stress_period_end_time_days_ay,
-        recharge_rate_spd_ay,
-        'ko',
-        label="measuched")
-# ax.plot(time_array_obs_output_m,
+# ax = axes[2,0]
+# ax.plot(stress_period_end_time_days_ay,
+#         recharge_rate_spd_ay,
+#         'ko',
+#         label="measuched")
+# ax.plot(time_array_obs_output_day,
 #         hydrualic_head_SA2_time_array_m - strt_m,
 #         'r.',
 #         label='SA3 Measurement')

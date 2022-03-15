@@ -178,3 +178,8 @@ plt.colorbar(c);
 # point_1['head_time_ay']=np.array(
 #     [ i[point_1['l'],point_1['r'],point_1['c']] for i in head_array_timeid_lrc_m ])
 # point_1 ['label']= 'x={:1.1e}'.format(point_1['x']) +  ', z={:1.1e}'.format(point_1['z'])    
+
+
+testutils.read_obs(
+    
+    mf6gwt_ra = gwt.obs.output.obs().data
