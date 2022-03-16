@@ -7,6 +7,12 @@ if hydraulic conductivity of the sandy layer
 is reduced, the large hydraulic conductivity in the oscillating boundary
 needs to be redued accordingLy_m 
 
+To allow the graph to pop out run:
+get_ipython().run_line_magic('matplotlib', 'auto')
+To make the graph in the plot box, run:
+get_ipython().run_line_magic('matplotlib', 'inline')
+
+
 need to install: 
 pip install -U csaps
 
@@ -66,30 +72,26 @@ vertices_elev_layer_l_list_m = np.linspace(ztop_m, zbot_m, nlay + 1)  # layer el
 
 # # time step parameters
 # nper   = 2                  # number of stress periods
-# perlen = [100,100]          # length of stress periods  days 
+# tsmult_ay_day = [100,100]          # length of stress periods  days 
 
 # 
-# nstp   = [100,100]          # number of steps per stress periods
+# nstp_ay   = [100,100]          # number of steps per stress periods
 # tsmult = [1. , 1.] # the multiplier for the length of successive time steps, 1 means time step is always the same
-# bool_steady_state_stress_period = [False, False]     # if the results needs to be in steady state
+# bool_steady_state_stress_period_ay = [False, False]     # if the results needs to be in steady state
 
 #last for 200 days, using 200 stress period, each stress period has one day
-nper = 350
-perlen = np.ones(nper)
-nstp   = np.ones(nper,dtype=int)
-tsmult = np.ones(nper)
-bool_steady_state_stress_period = np.zeros(nper,dtype=bool)
+nper = 350  # number of stress period
+tsmult_ay_day = np.ones(nper) # length of stress periods  days 
+nstp_ay       = np.ones(nper,dtype=int)
+tsmult        = np.ones(nper)
+bool_steady_state_stress_period_ay = np.zeros(nper,dtype=bool)
 
 
 
-stress_period_end_time_days_ay = np.cumsum(perlen)
- # output will be saved every # of intervals, unused at the moment
+stress_period_end_time_days_ay = np.cumsum(tsmult_ay_day)
+# output will be saved every # of intervals, unused at the moment
 step_interval_output = 2   
 
-# period data array input for dis package
-dis_perioddata_ay = []
-for i in np.arange(nper):
-    dis_perioddata_ay.append([perlen[i],nstp[i],tsmult[i]])
 
 hk_mPday = 10.0 
 hk_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * hk_mPday #*30.   # making hydraulic conductivity array  [lay_row_column]
@@ -119,13 +121,13 @@ field_data_df['time_elapsed_days'] = (field_data_df.index - field_data_df.index[
 # CZ220311 if tdis has this array, we do not need to produce here anymore.
 # 
 # for i in np.arange(nper):
-#     time_ay_current_stress_period = np.linspace(0,perlen[i]-perlen[i]/nstp[i],nstp[i]) 
+#     time_ay_current_stress_period = np.linspace(0,tsmult_ay_day[i]-tsmult_ay_day[i]/nstp_ay[i],nstp_ay[i]) 
 #     if i == 0: 
 #         times_ay_days= time_ay_current_stress_period
 #     else:
 #         times_ay_days = np.concatenate((times_ay_days, 
 #                                         times_ay_days[-1] + 
-#                                         perlen[i-1]/nstp[i-1] + 
+#                                         tsmult_ay_day[i-1]/nstp_ay[i-1] + 
 #                                         time_ay_current_stress_period
 #                                         ))
 # replaced by gwf.modeltime.totim
@@ -139,7 +141,10 @@ sim = flopy.mf6.MFSimulation(sim_name=modelname,
                              version='mf6',
 #                             exe_name='../Exe/mf6',  #comment this line means flopy will look for mf6 from system folders
                              sim_ws=ws)
-
+# period data array input for dis package
+dis_perioddata_ay = []
+for i in np.arange(nper):
+    dis_perioddata_ay.append([tsmult_ay_day[i],nstp_ay[i],tsmult[i]])
 tdis = flopy.mf6.ModflowTdis(sim, 
                              time_units='DAYS',
                              nper=nper, 
@@ -168,26 +173,25 @@ imsgwf = flopy.mf6.ModflowIms(sim, print_option='ALL',
 #%% cubic spline interpolating the surface water depth folloing the measurement
 
 from csaps import csaps
+# a coeficient to show the smoothness of the interpolation
 csaps_coef = 0.85
 surface_water_depth_rch_input_totim_ay_m = csaps(field_data_df['time_elapsed_days'], 
            field_data_df['surface_water_depth_m'],
            gwf.modeltime.totim, 
            smooth = csaps_coef)
 
-#%%
+# plot interpolation
 fig=plt.figure()
 ax=field_data_df.plot(x = 'time_elapsed_days',
                    y = 'surface_water_depth_m')
 plt.plot(gwf.modeltime.totim,
          surface_water_depth_rch_input_totim_ay_m,
          'o')
-ax.set_title('interpolate surface water depth for recharge input, coef = ' + str(csaps_coef) )
-#%%
+ax.set_title('interpolate surface water depth for recharge input, coef = ' 
+             + str(csaps_coef) )
+#%% dis package
 
 idomain = np.full((nlay, nrow, ncol), 1) # similar to idomain where 0 means inactive cell, 1 means active cell
-# idomain[0, 0, 1:6] = 0
-# idomain[1, 0, 2:5] = 0
-# idomain[2, 0, 3:4] = 0
 dis = flopy.mf6.ModflowGwfdis(gwf, 
                               nlay = nlay, 
                               nrow = nrow, 
@@ -252,7 +256,21 @@ adline_chd_intersect = g.intersect(adline_chd,
                                'line',
                                0)
 
-# CZ220315 still not successful to get point from gridgen.intersect
+
+
+
+
+# point_SA2 = g.intersect([(150.1,150.1)],
+#                         "point",
+#                         0)
+
+# point_SA2
+# point_intersect =  g.intersect([(150.1,150.1)],
+#                                 "point",
+#                                 0)
+
+
+
 #  flopy.utils.gridintersect.gridintersect.intersects works well for points
 # point_intersect =  g.intersect([[[(150.1,150.1)]]],
 #                                'point',
@@ -266,7 +284,6 @@ print(adline_chd_intersect.nodenumber)
 
 idomain_1d_list = np.zeros((ncol*nrow), dtype=int) + 3  # active cell
 rf2shp = os.path.join(gridgen_ws, 'rf0')
-#rf2shp = os.path.join(gridgen_ws, 'rf2')
 #%%  plot idomain
 #a[adpoly_lake_intersect.nodenumber] = 2
 idomain_rch = 2  # all the idomains that will be subjected to recharge will be tagged with 2.
@@ -288,8 +305,9 @@ ic = flopy.mf6.ModflowGwfic(gwf,
                             strt = strt_lrc_list_m)
 
 #%% #k33 ([double]) –
-#k33 (double) is the hydraulic conductivity of the third ellipsoid axis (or the ratio of K33/K if the K33OVERK option is specified); for an unrotated case, this is the vertical hydraulic conductivity.
-#When anisotropy is applied, K33 corresponds to the K33 tensor component. All included cells (IDOMAIN > 0) must have a K33 value greater than zero.
+#k33 (double) is the hydraulic conductivity of the third ellipsoid axis (or the ratio of K33/K if the
+# K33OVERK option is specified); for an unrotated case, this is the vertical hydraulic conductivity.
+# When anisotropy is applied, K33 corresponds to the K33 tensor component. All included cells (IDOMAIN > 0) must have a K33 value greater than zero.
 # icelltype (integer) flag for each cell that specifies how saturated thickness is treated. 0 means saturated thickness is held constant; 
 #:math:`>`0 means saturated thickness varies with computed head when head is below the cell top; 
 #:math:`<`0 means saturated thickness varies with computed head unless the THICKSTRT option is in effect. 
@@ -355,12 +373,12 @@ from flopy.utils.gridintersect import GridIntersect
 from shapely.geometry import Point
 ix = GridIntersect(gwf.modelgrid, method='vertex') # CZ220310 if the point is at the grid, both cells will be included.
 
-point_centre_pond = Point(150.1,150.1)
-point_centre_pond.id = ix.intersects(point_centre_pond)
-point_centre_pond.lrc_loc = (0, 
-                             point_centre_pond.id['cellids'][0][0], 
-                             point_centre_pond.id['cellids'][0][1])  # (layerid, rowid, columnid)
-
+point_SA2 = Point(150.1,150.1)
+point_SA2.id = ix.intersects(point_SA2)
+point_SA2.lrc_loc = (0, 
+                     point_SA2.id['cellids'][0][0], 
+                     point_SA2.id['cellids'][0][1])  # (layerid, rowid, columnid)
+#point_SA2.surface_area_cell_m2 = g.get_area()[point_SA2.id]
 # importing obs id
 #obs_wells = r".\objects\obs_wells.csv"
 #bs_vertices = np.genfromtxt(obs_wells, skip_header = 1, delimiter = ',')
@@ -369,13 +387,13 @@ point_centre_pond.lrc_loc = (0,
 #obs_id = ix.intersects(Point(obs_vertices[0], obs_vertices[1]))
 #obs_id
 
-point_SA3 = Point (Point(240.1,150.1) )
+point_SA3 = Point(240.1,150.1)
 point_SA3.cell_id = ix.intersects(point_SA3)
 point_SA3.lrc_loc = (0, 
                      point_SA3.cell_id['cellids'][0][0], 
                      point_SA3.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
 
-point_SA4 = Point (Point(280.1,150.1) )
+point_SA4 = Point(280.1,150.1)
 point_SA4.cell_id = ix.intersects(point_SA4)
 point_SA4.lrc_loc = (0, 
                      point_SA4.cell_id['cellids'][0][0], 
@@ -385,12 +403,12 @@ point_SA4.lrc_loc = (0,
 
 # for i in np.arange(nrow):
 #     for j in np.arange(ncol):
-#         dist = (gwf.modelgrid.xcellcenters[i][j] - point_centre_pond.x) **
+#         dist = (gwf.modelgrid.xcellcenters[i][j] - point_SA2.x) **
 # pond bed slope in tangent value.
 pond_bed_slope_tan = 0.003  # np.tan(.5*np.pi/180) np.arctan(0.003)/np.pi*180
 
-dist_to_pond_centre_cell_rc_ay_m = (( gwf.modelgrid.xcellcenters - point_centre_pond.x ) ** 2. + \
-                                   ( gwf.modelgrid.ycellcenters - point_centre_pond.y ) ** 2. ) \
+dist_to_pond_centre_cell_rc_ay_m = (( gwf.modelgrid.xcellcenters - point_SA2.x ) ** 2. + \
+                                   ( gwf.modelgrid.ycellcenters - point_SA2.y ) ** 2. ) \
                                    ** 0.5
 
 max_depth_m = radius_circle_m * pond_bed_slope_tan
@@ -417,11 +435,7 @@ surf = ax.plot_surface(gwf.modelgrid.xcellcenters,
 fig.colorbar(surf, shrink=0.5, aspect=10)
 dis.top = surface_elevation_cell_rc_ay_m
 
-
-
-
-
-#get_ipython().run_line_magic('matplotlib', 'inline')
+#
 
 
 
@@ -460,13 +474,13 @@ dis.top = surface_elevation_cell_rc_ay_m
 # gwf.modelgrid.xcellcenters
 # gwf.modelgrid.ycellcenters
 # surface_elevation_cell_rc_ay_m
-# point_centre_pond.xy or .x .y
-# point_centre_pond.lrc_loc
+# point_SA2.xy or .x .y
+# point_SA2.lrc_loc
 # point_SA3.cell_id   (9,16)
 
 
 rch_spd_dict = {}
-surface_elevation_centre_pond_m = surface_elevation_cell_rc_ay_m[  point_centre_pond.lrc_loc[1], point_centre_pond.lrc_loc[2]]
+point_SA2.surface_elevation_m = surface_elevation_cell_rc_ay_m[  point_SA2.lrc_loc[1], point_SA2.lrc_loc[2]]
 
 depth_unsat_zone_m  = 5.0
 kz_unsat_zone_mPday =  0.00864 * 5  # 1e-14 * 5 * 9800000 * 86400
@@ -477,7 +491,7 @@ for per in np.arange(nper):
     for i in  adpoly_lake_intersect.nodenumber_nonreapeating :
         lrc_lake_point = gwf.modelgrid.get_lrc(i)
         surface_elevation_lake_point_m = surface_elevation_cell_rc_ay_m[  lrc_lake_point[0][1], lrc_lake_point[0][2] ]
-        delta_z_m = surface_elevation_lake_point_m - surface_elevation_centre_pond_m   # tends to be a positive value as lake centre is a rather low point.
+        delta_z_m = surface_elevation_lake_point_m - point_SA2.surface_elevation_m   # tends to be a positive value as lake centre is a rather low point.
         water_depth_lake_point_m = surface_water_depth_rch_input_totim_ay_m[per] - delta_z_m
         if water_depth_lake_point_m < 0.01 : 
             recharge_rate_mPday = 0
@@ -499,7 +513,6 @@ rch = flopy.mf6.ModflowGwfrch(
     gwf, 
     stress_period_data = rch_spd_dict,
     pname='rch',   #"RCH-ZONE_{}".format(5),
-    #filename="{}.rch{}".format(modelname, 5),  # this only gives an alternatve place to save rch files
 )
 
 
@@ -519,7 +532,7 @@ obs = flopy.mf6.ModflowUtlobs(
     digits = 10, # default digits to print out
     print_input = True, 
     continuous= {'{}.obs.csv'.format(fModName):
-                 [['head_SA2', 'HEAD', point_centre_pond.lrc_loc],
+                 [['head_SA2', 'HEAD', point_SA2.lrc_loc],
                   ['head_SA3', 'HEAD', point_SA3.lrc_loc ],
                   ['head_SA4', 'HEAD', point_SA4.lrc_loc ],
                   ],
@@ -540,7 +553,7 @@ fname_rch_obs_out = '{}.rch.obs.csv'.format(fModName)
 rch.obs.initialize(filename= '{}.rch.obs'.format(fModName) ,
                    digits = 7,
                    continuous= {fname_rch_obs_out: 
-                                [['rch_SA2', 'RCH', point_centre_pond.lrc_loc],
+                                [['rch_SA2', 'RCH', point_SA2.lrc_loc],
                                  ['rch_SA3', 'RCH', point_SA3.lrc_loc ]
                                  ]} ,
                    )
@@ -552,7 +565,7 @@ rch.obs.initialize(filename= '{}.rch.obs'.format(fModName) ,
 # rch_obs = flopy.mf6.ModflowUtlobs(
 #     model  = gwf , # groundwater flow package to be used
 #     parent_file = rch ,
-#     continuous= {'aa_out':['rch_SA2', 'RCH', point_centre_pond.lrc_loc ] } ,
+#     continuous= {'aa_out':['rch_SA2', 'RCH', point_SA2.lrc_loc ] } ,
 #     filename = 'obs_2.obs',
 #     pname = 'obs_2'
 # )
@@ -631,7 +644,7 @@ chd_ = mm.plot_bc("CHD")
 #obs_ = mm.plot_bc("OBS")
 
 plt.plot(point_SA3.x,point_SA3.y,'ro',markersize=20)
-plt.plot(point_centre_pond.x,point_centre_pond.y,'bo',markersize=20)
+plt.plot(point_SA2.x,point_SA2.y,'bo',markersize=20)
 plt.plot(point_SA4.x,point_SA4.y,'go',markersize=20)
 
 mm.plot_grid()
@@ -698,8 +711,8 @@ ax  = fig.add_subplot(1, 1, 1)
 # grd = modeLx_msect.plot_grid()
 # ax.plot(gwf.modelgrid.xycenters[0] , head[-1,0,:], linewidth=5.0)
 # plt.colorbar(arr, shrink=1, ax=ax)
-times_head_ay = gwf.output.head().get_times()
-head = gwf.output.head().get_data(totim = times_head_ay[-1])
+times_head_ay_days = gwf.output.head().get_times()
+head = gwf.output.head().get_data(totim = times_head_ay_days[-1])
 times_bud_ay = gwf.output.head().get_times
 bud = gwf.output.budget()
 
@@ -739,8 +752,8 @@ time_array_obs_output_day, \
     delimiter=',').T
 
 time_array_rch_obs_output_day, \
-    recharge_SA2_time_array_mPday, \
-    recharge_SA3_time_array_mPday = \
+    recharge_SA2_time_array_m3Pday, \
+    recharge_SA3_time_array_m3Pday = \
     np.genfromtxt(os.path.join(ws,fname_rch_obs_out), 
     skip_header=1, 
     delimiter=',').T
@@ -756,8 +769,8 @@ fig, axes = plt.subplots(
 )
 
 title_str ='kh = {:1.1e}'.format(hk_mPday) + '_ nlay = {:1.1e}'.format(nlay) \
-    +'_ sy = {:1.1e}'.format(sy) \
-#    + '_ nstp = {:1.1e}'.format(nstp) 
+    +'_ sy = {:1.1e}'.format(sy) + '_ strt = {:1.1e}'.format(strt_m)
+#    + '_ nstp_ay = {:1.1e}'.format(nstp_ay) 
     
 fig.suptitle(title_str,fontsize=10)
 
@@ -772,7 +785,7 @@ ax.plot(time_array_obs_output_day,
         'b-',
         label='SA2 modelled')
 ax.set_xlabel('Time [s]')
-ax.set_ylabel('Pressure head[m]')
+ax.set_ylabel('Rise of \n pressure head [m]')
 ax.grid()
 ax.set_ylim(-0.1,3)
 ax.legend(loc="upper right",fontsize=10)
@@ -790,7 +803,7 @@ ax.plot(time_array_obs_output_day,
 ax.grid()
 ax.set_ylim(-0.1,3)
 ax.set_xlabel('Time [s]')
-ax.set_ylabel('Pressure head[m]')
+ax.set_ylabel('Rise of \n pressure head [m]')
 ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[1,0]
@@ -810,7 +823,7 @@ ax.plot(field_data_df['time_elapsed_days'],
 ax.grid()
 ax.set_ylim(-0.1,3)
 ax.set_xlabel('Time [s]')
-ax.set_ylabel('Pressure head[m]')
+ax.set_ylabel('Rise of \n pressure head [m]')
 ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[1,1]
@@ -832,11 +845,11 @@ ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[2,0]
 ax.plot(time_array_rch_obs_output_day,
-        recharge_SA2_time_array_mPday,
+        recharge_SA2_time_array_m3Pday,
         'r-',
         label='SA2 recharge')
 ax.plot(time_array_rch_obs_output_day,
-        recharge_SA3_time_array_mPday,
+        recharge_SA3_time_array_m3Pday,
         'b-',
         #markevery=1000,
         label="SA3 recharge")
@@ -859,10 +872,10 @@ linecollection = modeLx_msect.plot_grid()
 t = ax.set_title('Head a Cross-Section')
 #head = headobj.get_data(totim=times_output_list_day[1])
 for i in index_of_totim_output_list_day :
-    head = gwf.output.head().get_data(totim = times_head_ay[i])
+    head = gwf.output.head().get_data(totim = times_head_ay_days[i])
     ax.plot(gwf.modelgrid.xycenters[0],
             head[-1,int(nrow/2),:],
-            label ='day ' +str(times_head_ay[i]) 
+            label ='day ' +str(times_head_ay_days[i]) 
             )   
 ax.legend(loc="lower right",fontsize=10)
 
@@ -878,7 +891,6 @@ ax.legend(loc="lower right",fontsize=10)
 #         'r.',
 #         label='SA3 Measurement')
 ax.grid()
-#ax.set_ylim(-0.1,1)
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Recharge [m]')
 ax.legend(loc="upper right",fontsize=10)
