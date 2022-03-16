@@ -55,14 +55,36 @@ print('Model workspace is : {}'.format(os.getcwd()))
 
 #%% unit conversion
 mPmm = 0.001 # convert mm to m
+sPday = 86400 
+m2Pms = 1./980000.
+m2Pmday = m2Pms / sPday
+#%% list of variables that currently used for sensitivity analysis
+#kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.25; strt_m = -5; kz_clay_mPday = 0.043 ; zbot_m = -20.  # best results; but recharge, overestimated
+# because the recharge is overtestimated, we decied to putdown the k_clay 
+# kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.25; strt_m = -5; kz_clay_mPday = 0.000847 ; zbot_m = -20. 
+
+#kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.15; strt_m = -5; kz_clay_mPday = 0.000847 ; zbot_m = -20. 
+
+#kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.15; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10. # relative good outcome as the rise became instant
+
+# caseid= 'aa'; kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
+#caseid= 'ac'; kh_sand_mPday = 5.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
+#caseid= 'ad'; kh_sand_mPday = 5.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+#caseid= 'ae'; kh_sand_mPday = 2.5 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+#caseid= 'ag'; kh_sand_mPday = 2.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+caseid= 'ah'; kh_sand_mPday = 2.0 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+#caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+#caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
+#caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847/2 ; zbot_m = -10.
+# caseid= 'ab'; kh_sand_mPday = 1.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
 
 
 #%% model set_up
 Lx_m   = 300.    # from plot, y is plotted from left to right
 Ly_m   = 300.     # from plot, y is plotted upward
 ztop_m = 0.    # top elevation of z axis (gravity)
-zbot_m = -20.  # bottom elevation of z axis (gravity)
-nlay   = 1     # number of layers (gravity)
+
+
 nrow   = 20     # number of rows
 ncol   = 20
 delr_m = Lx_m / ncol
@@ -93,12 +115,11 @@ stress_period_end_time_days_ay = np.cumsum(tsmult_ay_day)
 step_interval_output = 2   
 
 
-hk_mPday = 10.0 
-hk_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * hk_mPday #*30.   # making hydraulic conductivity array  [lay_row_column]
-vka_lrc_list       = hk_lrc_list
+kh_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * kh_sand_mPday #*30.   # making hydraulic conductivity array  [lay_row_column]
+vka_lrc_list       = kh_lrc_list
 
 
-sy = 0.25    # specific yield, equivalent to effective porosity
+#sy = 0.25     # specific yield, equivalent to effective porosity
 ss = 1.e-4   #  specific storitivity, corresponding to the compressibity of solid matrix and fluids (water)
 
 #%%  read field data, which forms input and are for verification of the model.
@@ -220,23 +241,34 @@ if not os.path.exists(gridgen_ws):
 print('Model workspace is : {}'.format(model_ws))
 print('Gridgen workspace is : {}'.format(gridgen_ws))
 
+# a dot dict to group objects togeter
+# https://stackoverflow.com/a/23689767/1744434
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
 #%%  define a circle in the middle
-coordinate_centre_circle_xy_m =  (Lx_m/2.0,Ly_m/2.0)
-radius_circle_m   = 100.
 
-poly_circle_xy_list=[[[]]]
+adpoly_rch =dotdict({'centre_xy_ay_m'  : (Lx_m/2.0,Ly_m/2.0) ,
+                      'radius_m' : 100. , 
+                      'circle_perimeter_xy_ay': [[[]]]
+                      })
 
-for i in np.arange(0., 2.*np.pi, np.pi/30.):
-    poly_circle_xy_list[0][0].append((coordinate_centre_circle_xy_m[0] + 
-                                      radius_circle_m * np.cos(i),
-                                      coordinate_centre_circle_xy_m[1] + 
-                                      radius_circle_m * np.sin(i)
+#adpoly_rch.circle_perimeter_xy_ay=[[[]]]
+adpoly_rch.number_points_perimeter =30
+
+for i in np.arange(0., 2.*np.pi, np.pi/adpoly_rch.number_points_perimeter):
+    adpoly_rch.circle_perimeter_xy_ay[0][0].append((adpoly_rch.centre_xy_ay_m[0] + 
+                                      adpoly_rch.radius_m * np.cos(i),
+                                      adpoly_rch.centre_xy_ay_m[1] + 
+                                      adpoly_rch.radius_m * np.sin(i)
                                       ))
     
 # the below line is needed as the fist and final point needs 
 # to be exactly (meaning 5~=4.999999999) the same.
-poly_circle_xy_list[0][0].append(poly_circle_xy_list[0][0][0])
+adpoly_rch.circle_perimeter_xy_ay[0][0].append(adpoly_rch.circle_perimeter_xy_ay[0][0][0])
 
 g = Gridgen(dis, model_ws=gridgen_ws)
 g.build()
@@ -244,52 +276,61 @@ g.build()
 adshp = os.path.join(gridgen_ws, 'ad0')
 
 
-adline_chd = [[[(0,0),(Lx_m,0),(Lx_m,Ly_m),(0,Ly_m),(0,0)]]]
-# g.add_active_domain(adpoly_lake, range(nlay))
-
-# the number at the third argument refers to the layers.
-adpoly_lake_intersect = g.intersect(poly_circle_xy_list, 
-                                    'polygon', 
-                                    0)  
-
-adline_chd_intersect = g.intersect(adline_chd,
+adline_chd = dotdict({'xy_list_m':[[[(0,0),(Lx_m,0),(Lx_m,Ly_m),(0,Ly_m),(0,0)]]]})
+adline_chd.gridgen_intersect = g.intersect(adline_chd.xy_list_m,
                                'line',
                                0)
 
 
+# g.add_active_domain(adpoly_lake, range(nlay))
+
+# the number at the third argument refers to the layers.
+adpoly_rch.gridgen_intersect = g.intersect(adpoly_rch.circle_perimeter_xy_ay, 
+                                    'polygon', 
+                                    0)  
+
+point_SA3 = dotdict({'x_m':240.1,'y_m':150.1})
+point_SA3.gridgen_intersect = g.intersect([(point_SA3.x_m,point_SA3.y_m)],
+                         "point",
+                         0)
+point_SA3.lrc_loc = gwf.modelgrid.get_lrc(point_SA3.gridgen_intersect.nodenumber[0])[0]
+point_SA3.surface_area_cell_m2 = g.get_area()[point_SA3.gridgen_intersect.nodenumber[0]]
 
 
-
-# point_SA2 = g.intersect([(150.1,150.1)],
-#                         "point",
-#                         0)
-
-# point_SA2
-# point_intersect =  g.intersect([(150.1,150.1)],
-#                                 "point",
-#                                 0)
+point_SA2 = dotdict({'x_m':150.1,'y_m':150.1})
+point_SA2.gridgen_intersect = g.intersect([(point_SA2.x_m,point_SA2.y_m)] ,
+                         "point",
+                         0)
+point_SA2.lrc_loc = gwf.modelgrid.get_lrc(point_SA2.gridgen_intersect.nodenumber[0])[0]
+point_SA2.surface_area_cell_m2 = g.get_area()[point_SA2.gridgen_intersect.nodenumber[0]]
 
 
+point_SA4 = dotdict({'x_m':280.1,'y_m':150.1})
+point_SA4.gridgen_intersect = g.intersect([(point_SA4.x_m,point_SA4.y_m)] ,
+                         "point",
+                         0)
+point_SA4.lrc_loc = gwf.modelgrid.get_lrc(point_SA4.gridgen_intersect.nodenumber[0])[0]
+point_SA4.surface_area_cell_m2 = g.get_area()[point_SA4.gridgen_intersect.nodenumber[0]]
 
 #  flopy.utils.gridintersect.gridintersect.intersects works well for points
-# point_intersect =  g.intersect([[[(150.1,150.1)]]],
-#                                'point',
-#                                0)
+point_intersect =  g.intersect([[[(150.1,150.1)]]],
+                                'point',
+                                0)
 
-#adpoly_lake_intersect = g.intersect(poly_circle_xy_list, 'polygon', 1)
-print(adpoly_lake_intersect.dtype.names)
-print(adpoly_lake_intersect)
-print(adpoly_lake_intersect.nodenumber)
-print(adline_chd_intersect.nodenumber)
+#adpoly_rch.gridgen_intersect = g.intersect(adpoly_rch.circle_perimeter_xy_ay, 'polygon', 1)
+print(adpoly_rch.gridgen_intersect.dtype.names)
+print(adpoly_rch.gridgen_intersect)
+print(adpoly_rch.gridgen_intersect.nodenumber)
+print(adline_chd.gridgen_intersect.nodenumber)
 
 idomain_1d_list = np.zeros((ncol*nrow), dtype=int) + 3  # active cell
 rf2shp = os.path.join(gridgen_ws, 'rf0')
 #%%  plot idomain
-#a[adpoly_lake_intersect.nodenumber] = 2
+#a[adpoly_rch.gridgen_intersect.nodenumber] = 2
 idomain_rch = 2  # all the idomains that will be subjected to recharge will be tagged with 2.
 idomain_constant_head = 5 # chd
-idomain_1d_list[adpoly_lake_intersect.nodenumber] = idomain_rch
-idomain_1d_list[adline_chd_intersect.nodenumber]  = idomain_constant_head
+idomain_1d_list[adpoly_rch.gridgen_intersect.nodenumber] = idomain_rch
+idomain_1d_list[adline_chd.gridgen_intersect.nodenumber]  = idomain_constant_head
 idomain_lrc_list = idomain_1d_list.reshape(nlay,nrow,ncol)
 dis.idomain = idomain_lrc_list
 
@@ -297,7 +338,7 @@ dis.idomain = idomain_lrc_list
 #%% 
 # interesting to find that the it is better to be converged, 
 # when the head is above zero 
-strt_m = -5 
+
 strt_lrc_list_m = strt_m * \
     np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
     
@@ -318,7 +359,7 @@ npf = flopy.mf6.ModflowGwfnpf(gwf,
                               save_flows = True,
                               save_specific_discharge = True,
                               icelltype = 1,   # meaning that transmissivity changes with heads
-                              k   = hk_lrc_list, 
+                              k   = kh_lrc_list, 
                               k33 = vka_lrc_list)
 # iconvert (integer) is a flag for each cell that specifies 
 # whether or not a cell is convertible for the storage 
@@ -351,8 +392,8 @@ oc = flopy.mf6.ModflowGwfoc(gwf,
 #%% constant head package
 chd_spd = []
 
-boundary_constant_head_m= -5
-for i in list(set(adline_chd_intersect.nodenumber)):
+boundary_constant_head_m = strt_m
+for i in list(set(adline_chd.gridgen_intersect.nodenumber)):
     coord= gwf.modelgrid.get_lrc(i)
     chd_spd.append(  [ (0 , coord[0][1], coord[0][2]) , 
                       boundary_constant_head_m  ] )
@@ -369,15 +410,15 @@ chd = flopy.mf6.ModflowGwfchd(
 # Note: the row starts from top to bottom, so the first row has 
 # a coordinate of 300, the last row has a corrdinate of 0
 
-from flopy.utils.gridintersect import GridIntersect
-from shapely.geometry import Point
-ix = GridIntersect(gwf.modelgrid, method='vertex') # CZ220310 if the point is at the grid, both cells will be included.
+# from flopy.utils.gridintersect import GridIntersect
+# from shapely.geometry import Point
+# ix = GridIntersect(gwf.modelgrid, method='vertex') # CZ220310 if the point is at the grid, both cells will be included.
 
-point_SA2 = Point(150.1,150.1)
-point_SA2.id = ix.intersects(point_SA2)
-point_SA2.lrc_loc = (0, 
-                     point_SA2.id['cellids'][0][0], 
-                     point_SA2.id['cellids'][0][1])  # (layerid, rowid, columnid)
+# point_SA2 = Point(150.1,150.1)
+# point_SA2.id = ix.intersects(point_SA2)
+# point_SA2.lrc_loc = (0, 
+#                      point_SA2.id['cellids'][0][0], 
+#                      point_SA2.id['cellids'][0][1])  # (layerid, rowid, columnid)
 #point_SA2.surface_area_cell_m2 = g.get_area()[point_SA2.id]
 # importing obs id
 #obs_wells = r".\objects\obs_wells.csv"
@@ -387,17 +428,17 @@ point_SA2.lrc_loc = (0,
 #obs_id = ix.intersects(Point(obs_vertices[0], obs_vertices[1]))
 #obs_id
 
-point_SA3 = Point(240.1,150.1)
-point_SA3.cell_id = ix.intersects(point_SA3)
-point_SA3.lrc_loc = (0, 
-                     point_SA3.cell_id['cellids'][0][0], 
-                     point_SA3.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
+# point_SA3 = Point(240.1,150.1)
+# point_SA3.cell_id = ix.intersects(point_SA3)
+# point_SA3.lrc_loc = (0, 
+#                      point_SA3.cell_id['cellids'][0][0], 
+#                      point_SA3.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
 
-point_SA4 = Point(280.1,150.1)
-point_SA4.cell_id = ix.intersects(point_SA4)
-point_SA4.lrc_loc = (0, 
-                     point_SA4.cell_id['cellids'][0][0], 
-                     point_SA4.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
+# point_SA4 = Point(280.1,150.1)
+# point_SA4.cell_id = ix.intersects(point_SA4)
+# point_SA4.lrc_loc = (0, 
+#                      point_SA4.cell_id['cellids'][0][0], 
+#                      point_SA4.cell_id['cellids'][0][1]) # (layerid, rowid, columnid)
 
 # dist_to_pond_centre_xy_ay_m = np.zeros([nrow,ncol],dtype=float)
 
@@ -407,11 +448,11 @@ point_SA4.lrc_loc = (0,
 # pond bed slope in tangent value.
 pond_bed_slope_tan = 0.003  # np.tan(.5*np.pi/180) np.arctan(0.003)/np.pi*180
 
-dist_to_pond_centre_cell_rc_ay_m = (( gwf.modelgrid.xcellcenters - point_SA2.x ) ** 2. + \
-                                   ( gwf.modelgrid.ycellcenters - point_SA2.y ) ** 2. ) \
+dist_to_pond_centre_cell_rc_ay_m = (( gwf.modelgrid.xcellcenters - point_SA2.x_m ) ** 2. + \
+                                   ( gwf.modelgrid.ycellcenters - point_SA2.y_m ) ** 2. ) \
                                    ** 0.5
 
-max_depth_m = radius_circle_m * pond_bed_slope_tan
+max_depth_m = adpoly_rch.radius_m * pond_bed_slope_tan
 
 depth_cell_rc_ay_m = max_depth_m - dist_to_pond_centre_cell_rc_ay_m * pond_bed_slope_tan
 
@@ -422,7 +463,7 @@ surface_elevation_cell_rc_ay_m = ztop_m - depth_cell_rc_ay_m
 
 
 from matplotlib import cm
-#get_ipython().run_line_magic('matplotlib', 'auto')  #allow the graph to pop out
+get_ipython().run_line_magic('matplotlib', 'auto')  #allow the graph to pop out
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(1, 1, 1, projection='3d')
 ax.set_title('3-D view of surface elevation')
@@ -454,7 +495,7 @@ dis.top = surface_elevation_cell_rc_ay_m
 #     = 0.1
 # for per in np.arange(nper):
 #     rch_spd = []
-#     for i in list(set(adpoly_lake_intersect.nodenumber)) :
+#     for i in list(set(adpoly_rch.gridgen_intersect.nodenumber)) :
 #         coord= gwf.modelgrid.get_lrc(i)
 #         rch_spd.append([0, 
 #                         coord[0][1], 
@@ -476,19 +517,21 @@ dis.top = surface_elevation_cell_rc_ay_m
 # surface_elevation_cell_rc_ay_m
 # point_SA2.xy or .x .y
 # point_SA2.lrc_loc
-# point_SA3.cell_id   (9,16)
 
 
 rch_spd_dict = {}
 point_SA2.surface_elevation_m = surface_elevation_cell_rc_ay_m[  point_SA2.lrc_loc[1], point_SA2.lrc_loc[2]]
 
 depth_unsat_zone_m  = 5.0
-kz_unsat_zone_mPday =  0.00864 * 5  # 1e-14 * 5 * 9800000 * 86400
-adpoly_lake_intersect.nodenumber_nonreapeating = list(set(adpoly_lake_intersect.nodenumber))
+
+#kz_clay_mPday =  0.00864 #* 5  # 1e-14 * 5 * 9800000 * 86400 # crazy result
+
+#kz_clay_mPday =  0.00864 * 5 # best result
+adpoly_rch.gridgen_intersect.nodenumber_nonreapeating = list(set(adpoly_rch.gridgen_intersect.nodenumber))
 
 for per in np.arange(nper):
     rch_spd = []
-    for i in  adpoly_lake_intersect.nodenumber_nonreapeating :
+    for i in  adpoly_rch.gridgen_intersect.nodenumber_nonreapeating :
         lrc_lake_point = gwf.modelgrid.get_lrc(i)
         surface_elevation_lake_point_m = surface_elevation_cell_rc_ay_m[  lrc_lake_point[0][1], lrc_lake_point[0][2] ]
         delta_z_m = surface_elevation_lake_point_m - point_SA2.surface_elevation_m   # tends to be a positive value as lake centre is a rather low point.
@@ -496,7 +539,7 @@ for per in np.arange(nper):
         if water_depth_lake_point_m < 0.01 : 
             recharge_rate_mPday = 0
         else:
-            recharge_rate_mPday = kz_unsat_zone_mPday * \
+            recharge_rate_mPday = kz_clay_mPday * \
                 (depth_unsat_zone_m + water_depth_lake_point_m) / depth_unsat_zone_m
 
         rch_spd.append([0, 
@@ -522,7 +565,7 @@ rch = flopy.mf6.ModflowGwfrch(
 
 # a = [ rch_spd_dict[i][0][9][10] for i in np.arange(nper) ]
 
-# for rch_spd_dict the indexes are [stresperiod][ index in adpoly_lake_intersect.nodenumber_nonreapeating ][1-layer, 2-row, 3- column 4-rechargerate]
+# for rch_spd_dict the indexes are [stresperiod][ index in adpoly_rch.gridgen_intersect.nodenumber_nonreapeating ][1-layer, 2-row, 3- column 4-rechargerate]
 
 
 
@@ -643,9 +686,9 @@ rch_ = mm.plot_bc("RCH")
 chd_ = mm.plot_bc("CHD")
 #obs_ = mm.plot_bc("OBS")
 
-plt.plot(point_SA3.x,point_SA3.y,'ro',markersize=20)
-plt.plot(point_SA2.x,point_SA2.y,'bo',markersize=20)
-plt.plot(point_SA4.x,point_SA4.y,'go',markersize=20)
+plt.plot(point_SA3.x_m,point_SA3.y_m,'ro',markersize=20)
+plt.plot(point_SA2.x_m,point_SA2.y_m,'bo',markersize=20)
+plt.plot(point_SA4.x_m,point_SA4.y_m,'go',markersize=20)
 
 mm.plot_grid()
 plt.xticks(fontsize=30)
@@ -761,16 +804,16 @@ time_array_rch_obs_output_day, \
 
 #%% plot multiple graph to show changes of the results
 fig, axes = plt.subplots(
-    ncols=2,
-    nrows=3,
-    sharex=False,
-    figsize=(9.3, 6.3),
+    ncols = 2,
+    nrows = 3,
+    sharex= False,
+    figsize = (9.3, 6.3),
     constrained_layout=True,
 )
 
-title_str ='kh = {:1.1e}'.format(hk_mPday) + '_ nlay = {:1.1e}'.format(nlay) \
-    +'_ sy = {:1.1e}'.format(sy) + '_ strt = {:1.1e}'.format(strt_m)
-#    + '_ nstp_ay = {:1.1e}'.format(nstp_ay) 
+title_str =caseid + ')_kzsand = {:1.1e}'.format(kh_sand_mPday) + '_ nlay = {:1.1e}'.format(nlay) \
+    +'_ sy = {:1.1e}'.format(sy) + '_ strt = {:1.1e}'.format(strt_m) \
+    + '_ kzclay = {:1.1e}'.format(kz_clay_mPday) + '_ abot = {:1.1e}'.format(zbot_m)
     
 fig.suptitle(title_str,fontsize=10)
 
@@ -845,11 +888,11 @@ ax.legend(loc="upper right",fontsize=10)
 
 ax = axes[2,0]
 ax.plot(time_array_rch_obs_output_day,
-        recharge_SA2_time_array_m3Pday,
+        recharge_SA2_time_array_m3Pday/point_SA2.surface_area_cell_m2,
         'r-',
         label='SA2 recharge')
 ax.plot(time_array_rch_obs_output_day,
-        recharge_SA3_time_array_m3Pday,
+        recharge_SA3_time_array_m3Pday/point_SA3.surface_area_cell_m2,
         'b-',
         #markevery=1000,
         label="SA3 recharge")
@@ -900,7 +943,7 @@ ax.legend(loc="upper right",fontsize=10)
 plt.show()
 
 
-fname_save=title_str.replace(';', ' ').replace('+', '').replace('e-', 'ne') \
+fname_save=title_str.replace(';', '').replace('+', '').replace('e-', 'ne') \
     .replace('=', '_').replace(' ', '')
 print(fname_save)
 plt.savefig(fname_save+'.png',dpi=300)
