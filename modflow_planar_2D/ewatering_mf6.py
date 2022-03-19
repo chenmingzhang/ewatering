@@ -17,7 +17,7 @@ need to install:
 pip install -U csaps
 
 """
-
+#%%
 import os
 import sys
 import numpy as np
@@ -62,29 +62,27 @@ m2Pmday = m2Pms / sPday
 #kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.25; strt_m = -5; kz_clay_mPday = 0.043 ; zbot_m = -20.  # best results; but recharge, overestimated
 # because the recharge is overtestimated, we decied to putdown the k_clay 
 # kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.25; strt_m = -5; kz_clay_mPday = 0.000847 ; zbot_m = -20. 
-
 #kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.15; strt_m = -5; kz_clay_mPday = 0.000847 ; zbot_m = -20. 
-
 #kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.15; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10. # relative good outcome as the rise became instant
-
 # caseid= 'aa'; kh_sand_mPday = 10.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
 #caseid= 'ac'; kh_sand_mPday = 5.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
 #caseid= 'ad'; kh_sand_mPday = 5.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
 #caseid= 'ae'; kh_sand_mPday = 2.5 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
 #caseid= 'ag'; kh_sand_mPday = 2.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
-caseid= 'ah'; kh_sand_mPday = 2.0 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
+#caseid= 'ah'; kh_sand_mPday = 2.0 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.  # best we get so far
 #caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847*2 ; zbot_m = -10.
 #caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
 #caseid= 'ai'; kh_sand_mPday = 0.25 ; nlay = 1;sy = 0.03; strt_m = -6; kz_clay_mPday = 0.000847/2 ; zbot_m = -10.
 # caseid= 'ab'; kh_sand_mPday = 1.0 ; nlay = 1;sy = 0.10; strt_m = -6; kz_clay_mPday = 0.000847 ; zbot_m = -10.
-
-
+params= {
+    'caseid': 'ah', 'kh_sand_mPday': 2.0 , 'nlay': 1,'sy': 0.03, 'strt_m': -6, 'kz_clay_mPday':  0.000847*2 , 'zbot_m': -10.
+    }
 #%% model set_up
 Lx_m   = 300.    # from plot, y is plotted from left to right
 Ly_m   = 300.     # from plot, y is plotted upward
 ztop_m = 0.    # top elevation of z axis (gravity)
-
-
+zbot_m = params['zbot_m']
+nlay   = params['nlay'] 
 nrow   = 20     # number of rows
 ncol   = 20
 delr_m = Lx_m / ncol
@@ -114,11 +112,11 @@ stress_period_end_time_days_ay = np.cumsum(tsmult_ay_day)
 # output will be saved every # of intervals, unused at the moment
 step_interval_output = 2   
 
-
+kh_sand_mPday = params['kh_sand_mPday'] 
 kh_lrc_list        = np.ones((nlay, nrow, ncol), dtype=np.int32) * kh_sand_mPday #*30.   # making hydraulic conductivity array  [lay_row_column]
 vka_lrc_list       = kh_lrc_list
 
-
+sy = params['sy'] 
 #sy = 0.25     # specific yield, equivalent to effective porosity
 ss = 1.e-4   #  specific storitivity, corresponding to the compressibity of solid matrix and fluids (water)
 
@@ -338,7 +336,7 @@ dis.idomain = idomain_lrc_list
 #%% 
 # interesting to find that the it is better to be converged, 
 # when the head is above zero 
-
+strt_m = params['strt_m']
 strt_lrc_list_m = strt_m * \
     np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
     
@@ -523,7 +521,7 @@ rch_spd_dict = {}
 point_SA2.surface_elevation_m = surface_elevation_cell_rc_ay_m[  point_SA2.lrc_loc[1], point_SA2.lrc_loc[2]]
 
 depth_unsat_zone_m  = 5.0
-
+kz_clay_mPday= params['kz_clay_mPday']
 #kz_clay_mPday =  0.00864 #* 5  # 1e-14 * 5 * 9800000 * 86400 # crazy result
 
 #kz_clay_mPday =  0.00864 * 5 # best result
@@ -811,9 +809,13 @@ fig, axes = plt.subplots(
     constrained_layout=True,
 )
 
-title_str =caseid + ')_kzsand = {:1.1e}'.format(kh_sand_mPday) + '_ nlay = {:1.1e}'.format(nlay) \
-    +'_ sy = {:1.1e}'.format(sy) + '_ strt = {:1.1e}'.format(strt_m) \
-    + '_ kzclay = {:1.1e}'.format(kz_clay_mPday) + '_ abot = {:1.1e}'.format(zbot_m)
+title_str =params['caseid'] + \
+    ')_kzsand = {:1.1e}'.format(kh_sand_mPday) + \
+    '_ nlay = {:1.1e}'.format(nlay) \
+    +'_ sy = {:1.1e}'.format(sy) + \
+    '_ strt = {:1.1e}'.format(strt_m) \
+    + '_ kzclay = {:1.1e}'.format(kz_clay_mPday) + \
+    '_ abot = {:1.1e}'.format(zbot_m)
     
 fig.suptitle(title_str,fontsize=10)
 
@@ -922,27 +924,11 @@ for i in index_of_totim_output_list_day :
             )   
 ax.legend(loc="lower right",fontsize=10)
 
-
-
-# ax = axes[2,0]
-# ax.plot(stress_period_end_time_days_ay,
-#         recharge_rate_spd_ay,
-#         'ko',
-#         label="measuched")
-# ax.plot(time_array_obs_output_day,
-#         hydrualic_head_SA2_time_array_m - strt_m,
-#         'r.',
-#         label='SA3 Measurement')
 ax.grid()
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Recharge [m]')
 ax.legend(loc="upper right",fontsize=10)
-
-
-
 plt.show()
-
-
 fname_save=title_str.replace(';', '').replace('+', '').replace('e-', 'ne') \
     .replace('=', '_').replace(' ', '')
 print(fname_save)
