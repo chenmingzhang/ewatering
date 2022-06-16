@@ -1,0 +1,1 @@
+run sl_write_input.mlx;sl_read;read_measured_data;sl_analyze_dashboard_full;
