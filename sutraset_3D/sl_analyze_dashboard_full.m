@@ -7,7 +7,7 @@ dz_ele_mtx_3d                                                    = cat(1,zeros(1
 
 area_xz_cell_mtx_m2_3d                                           = -dx_cell_mtx_3d .* dz_cell_mtx_3d;
 area_xz_ele_mtx_m2_3d                                            = -dx_ele_mtx_3d  .* dz_ele_mtx_3d ;
-area_xy_ele_mtx_m2_2d(1,:)                                       = (1/2) * (y_nod_matrix_mtx_2d(1,1:end-1)+y_nod_matrix_mtx_2d(1,2:end) ) .* squeeze(dx_cell_mtx_3d(1,3,2:end) )';
+area_xy_ele_mtx_m2_2d(1,:)                                       = (1/2) * (y_nod_matrix_mtx_2d(1,1:end-1)+y_nod_matrix_mtx_2d(1,2:end) ) .* squeeze(diff(x_nod_mtx_2d(1,:) ));%formula to calculate the area of 
 area_xy_ele_mtx_m2_2d(2,:)                                       = area_xy_ele_mtx_m2_2d(1,:);
 
 for i = 1:nez
@@ -35,7 +35,7 @@ outflow_bcop_cumsum_kg                                           = cumsum(outflo
 %et1_mmday                                                       = et1_kgs/area1*86400;
 %time_day                                                        = [bcof.tout]/3600/24;
 time_nod_day                                                     = arrayfun(@(y) y.tout,nod) * c.dayPsec;
-time_series                                                      =([itout(1) diff(itout)] .* durn);
+time_series                                                      = ([itout(1) diff(itout)] .* durn);
 pet_observed_kg                                                  = cumsum(time_interval*c.rhow_pure_water*Tbl.pet_mmPday*c.mPmm*(pi*pond_radius_m^2)*c.dayPsec);
 % saturation profile
 %d(1).terms{p_idx}(1:inp.nn1)
@@ -45,37 +45,41 @@ et_mmPday                                                        =c.m2mm*sink_kg
 pet_movmean_mmPday                                               =movmean(Tbl.pet_mmPday,6*24);
 %calculate flux cross the groundwater table
 saturation                                                       = cell2mat(arrayfun(@(y) y.terms{s_idx},nod,'UniformOutput',false) );
-vy                                                               = cell2mat(arrayfun(@(y) y.terms{vy_idx},ele,'UniformOutput',false) );
-vy_matrix                                                        = reshape(vy,[inp.nn1-1,inp.nn2-1,inp.nn3-1,length(ele)]);
-vz                                                               = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele,'UniformOutput',false) );
-vz_matrix                                                        = reshape(vz,[inp.nn1-1,inp.nn2-1,inp.nn3-1,length(ele)]);
 saturation_xyzt                                                  = reshape(saturation,[inp.nn1,inp.nn2,inp.nn3,length(nod)]);
-
 pond_boundary_ele_index                                          = find(mask_ele_mtx_pond_boundary == 1) ;
 mask_ele_mtx_pond_boundary_for_flux                              = zeros(nez,ney,nex);
-mask_ele_mtx_pond_boundary_for_flux(pond_boundary_ele_index+2)   = 1;
+mask_ele_mtx_pond_boundary_for_flux(pond_boundary_ele_index+2)   = 1; %%take the second point below the pond boundary
 mask_ele_mtx_pond_boundary_for_flux                              = logical(mask_ele_mtx_pond_boundary_for_flux);
-vz_matrix_for_flux                                               = vz_matrix;
-vz_matrix_for_flux(vz_matrix_for_flux>0)                         = 0;
+
 for i =1:length(ele)
-    flux_ele_xy_kgPs(:,:,:,i)                                    = area_xy_ele_mtx_m2_3d .* nod_to_ele(nex,ney,nez,squeeze(saturation_xyzt(:,:,:,i) ) )...
-																	 .* nod_to_ele(nex,ney,nez,porosity_nod_mtx) .* -squeeze(vz_matrix_for_flux(:,:,:,i) ) .* (c.rhow_pure_water);%flux across xy plane
-    flux_ele_xz_kgPs(:,:,:,i)                                    = area_xz_ele_mtx_m2_3d .* nod_to_ele(nex,ney,nez,squeeze(saturation_xyzt(:,:,:,i) ) )...
-																 .* nod_to_ele(nex,ney,nez,porosity_nod_mtx) .* -squeeze(vy_matrix(:,:,:,i) ) .* (c.rhow_pure_water);%flux across xy plane       
-    pond_flux_ele_xy_kgPs(:,:,:,i)                               = squeeze(flux_ele_xy_kgPs(:,:,:,i) ) .* mask_ele_mtx_pond_boundary_for_flux;
-    aquitard_flux_ele_xy_kgPs(:,:,:,i)                           = squeeze(flux_ele_xy_kgPs(:,:,:,i) ) .* mask_ele_mtx_aquitard_layer;%%only consider the downward flow
-    silt_flux_ele_xz_kgPs(:,:,:,i)                               = squeeze(flux_ele_xz_kgPs(:,:,:,i) ) .* (mask_ele_mtx_silt_layer - mask_ele_mtx_pond_layer);
+    vy                                                               = cell2mat(arrayfun(@(y) y.terms{vy_idx},ele(i),'UniformOutput',false) ); 
+    vy_matrix                                                        = reshape(vy,[inp.nn1-1,inp.nn2-1,inp.nn3-1]);
+    vz                                                               = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele(i),'UniformOutput',false) );
+    vz_matrix                                                        = reshape(vz,[inp.nn1-1,inp.nn2-1,inp.nn3-1]);
+    flux_ele_xy_kgPs                                                 = area_xy_ele_mtx_m2_3d .* nod_to_ele(nex,ney,nez,squeeze(saturation_xyzt(:,:,:,i) ) )...
+																	 .* nod_to_ele(nex,ney,nez,porosity_nod_mtx) .* vz_matrix(:,:,:) .* (c.rhow_pure_water);%flux across xy plane
+    flux_ele_xz_kgPs                                                 = area_xz_ele_mtx_m2_3d .* nod_to_ele(nex,ney,nez,squeeze(saturation_xyzt(:,:,:,i) ) )...
+                                                                    .* nod_to_ele(nex,ney,nez,porosity_nod_mtx) .* vy_matrix(:,:,:)  .* (c.rhow_pure_water);%flux across xy plane       
+    pond_flux_ele_xy_kgPs(:,i)                                       = flux_ele_xy_kgPs(mask_ele_mtx_pond_boundary_for_flux);
+    aquitard_flux_ele_xy_kgPs(:,i)                                   = flux_ele_xy_kgPs(mask_ele_mtx_aquitard_layer);%%only consider the downward flow
+    clay_flux_ele_xz_kgPs(:,i)                                       = flux_ele_xz_kgPs(logical(mask_ele_mtx_above_quifer_layer - mask_ele_mtx_pond_layer));
 end
 
-Infiltration_kg                                                  = cumsum( squeeze(sum(sum(sum( (pond_flux_ele_xy_kgPs),1) , 2 ) , 3) ) )' .* tout_diff_s;
-Infiltration_macropore_kg                                        = cumsum( squeeze(sum(sum (squeeze(pond_flux_ele_xy_kgPs(:,1,:,:) ),1) , 2 ) ) )' .* tout_diff_s;
-Infiltration_matrix_kg                                           = cumsum( squeeze(sum(sum (squeeze(pond_flux_ele_xy_kgPs(:,2,:,:) ),1) , 2 ) ) )' .* tout_diff_s;
+pond_flux_ele_xy_downwards_kgPs                                              = pond_flux_ele_xy_kgPs;
+pond_flux_ele_xy_downwards_kgPs(pond_flux_ele_xy_downwards_kgPs > 0)         = 0;
+aquitard_flux_ele_xy_downwards_kgPs                                          = aquitard_flux_ele_xy_kgPs;
+aquitard_flux_ele_xy_downwards_kgPs(aquitard_flux_ele_xy_downwards_kgPs > 0) = 0;
 
-Recharge_kg                                                      = cumsum( squeeze(sum(sum(sum( (aquitard_flux_ele_xy_kgPs),1) , 2 ) , 3) ) )' .* tout_diff_s;
-Recharge_macropore_kg                                            = cumsum( squeeze(sum(sum (squeeze(aquitard_flux_ele_xy_kgPs(:,1,:,:) ),1) , 2 ) ) )' .* tout_diff_s;
-Recharge_matrix_kg                                               = cumsum( squeeze(sum(sum (squeeze(aquitard_flux_ele_xy_kgPs(:,2,:,:) ),1) , 2 ) ) )' .* tout_diff_s;
-exchange_macropore_kg                                            = -cumsum( squeeze(sum(sum( squeeze(silt_flux_ele_xz_kgPs(:,1,:,:) ),1 ), 2 ) ) )' .* tout_diff_s;
-exchange_matrix_kg                                               = -cumsum( squeeze(sum(sum( squeeze(silt_flux_ele_xz_kgPs(:,2,:,:) ),1 ), 2 ) ) )' .* tout_diff_s;
+Infiltration_kg                                                  = cumsum( sum( -pond_flux_ele_xy_downwards_kgPs ,1 )) .* tout_diff_s;
+Infiltration_macropore_kg                                        = cumsum( sum( -pond_flux_ele_xy_downwards_kgPs(1:ney:end,:) ,1 )) .* tout_diff_s;
+Infiltration_matrix_kg                                           = cumsum( sum( -pond_flux_ele_xy_downwards_kgPs(2:ney:end,:) ,1 )) .* tout_diff_s;
+
+Recharge_kg                                                  = cumsum( sum( -aquitard_flux_ele_xy_downwards_kgPs ,1 )) .* tout_diff_s;
+Recharge_macropore_kg                                        = cumsum( sum( -aquitard_flux_ele_xy_downwards_kgPs(1:ney:end,:) ,1 )) .* tout_diff_s;
+Recharge_matrix_kg                                           = cumsum( sum( -aquitard_flux_ele_xy_downwards_kgPs(2:ney:end,:) ,1 )) .* tout_diff_s;
+
+exchange_macropore_kg                                            = -cumsum( sum( -clay_flux_ele_xz_kgPs(1:ney:end,:) ,1 )) .* tout_diff_s;
+exchange_matrix_kg                                               = -cumsum( sum( -clay_flux_ele_xz_kgPs(2:ney:end,:) ,1 )) .* tout_diff_s;
 
 % pond_flux_xy_kgPs(i)                                           = squeeze(-sum(sum(sum(pond_flux_ele_xy_kgPs,1),2),3) );
 for i =1:length(nod)
@@ -85,11 +89,11 @@ for i =1:length(nod)
     % water_amount_kg                                            =volume_cell_m3 .* inp.por .* saturation .* (c.rhow_pure_water);
     % pond_water_amount_kg                                       =volume_cell_m3 .* porosity_nod_mtx_gravity_compensated_1d .* saturation_gravity_compensated_1d .* (c.rhow_pure_water+inp.drwdu*solute_concentration_gravity_compensated_1d) .* reshape(mask_nod_mtx_pond_cell_gravity_compensated,[inp.nn1*inp.nn2,1]);
     pond_water_cell_kg                                           = water_mass_per_cell_kg .* mask_nod_mtx_pond_cell;
-    above_groundwater_zone_water_cell_kg                         = water_mass_per_cell_kg .* (mask_porosity_nod_silt_layer-mask_nod_mtx_macropore-mask_nod_mtx_pond_cell);
+    above_groundwater_zone_water_cell_kg                         = water_mass_per_cell_kg .* (mask_porosity_nod_above_aquifer_layer-mask_nod_mtx_macropore-mask_nod_mtx_pond_cell);
     total_water_sum_kg(i)                                        = squeeze(sum(sum(sum(water_mass_per_cell_kg,1 ),2),3) )';
     pond_water_sum_kg(i)                                         = squeeze(sum(sum(sum(pond_water_cell_kg,1),2),3) )';
-    above_groundwater_zone_water_cell_kg                         = water_mass_per_cell_kg .* (mask_nod_mtx_silt_layer - mask_nod_mtx_pond_cell);
-    silt_zone_water_cell_kg(i)                                   = squeeze(sum(sum(sum(above_groundwater_zone_water_cell_kg,1),2),3 ) );
+    above_groundwater_zone_water_cell_kg                         = water_mass_per_cell_kg .* (mask_nod_mtx_above_quifer_layer - mask_nod_mtx_pond_cell);
+    clay_zone_water_cell_kg(i)                                   = squeeze(sum(sum(sum(above_groundwater_zone_water_cell_kg,1),2),3 ) );
 end
 % write x y and z coordinates in matrix form.
 water_height_per_cell_mtx_m                                      = -dz_cell_mtx_3d .* saturation_xyzt;
@@ -98,7 +102,7 @@ porosity_ele_mtx                                                 = nod_to_ele(ne
 % p_top                                                          = arrayfun(@(y) y.terms{p_idx}(inp.nn1),nod);
 % sw_top                                                         = arrayfun(@(y) y.terms{s_idx}(inp.nn1),nod);
 point_1_pond.x                                                   = 5;
-[M index_point_1_pond]                                           = min(abs(point_1_pond.x-x_array) );
+[M index_point_1_pond]                                           = min(abs(point_1_pond.x-x_nod_coord_in_x_ay_m) );
 point_1_pond.y                                                   = 2 * pi * point_1_pond.x;
 point_1_pond.z                                                   = location_of_pond_boundary_nod(index_point_1_pond);
 xdist_array                                                      = point_1_pond.x-x_nod_array; ydist_array = point_1_pond.y-y_nod_array;zdist_array = point_1_pond.z - z_nod_array;
@@ -112,7 +116,7 @@ point_1_pond.mark_shape                                          = 'cx';
 
 %%
 sa2_macropore_point_a.x                                          = 5;
-[M index_sa2_macropore_point_a]                                  = min(abs(sa2_macropore_point_a.x-x_array) );
+[M index_sa2_macropore_point_a]                                  = min(abs(sa2_macropore_point_a.x-x_nod_coord_in_x_ay_m) );
 sa2_macropore_point_a.y                                          = -2 * pi * sa2_macropore_point_a.x;
 sa2_macropore_point_a.z                                          = depth_groundwater_table_m + 1;
 xdist_array                                                      = sa2_macropore_point_a.x-x_nod_array; ydist_array = sa2_macropore_point_a.y-y_nod_array;zdist_array = sa2_macropore_point_a.z-z_nod_array;
@@ -125,7 +129,7 @@ sa2_macropore_point_a.legend                                     = sprintf('x = 
 sa2_macropore_point_a.mark_shape                                 = 'cx';
 
 sa3_macropore_point_a.x                                          = 100;
-[M index_sa3_macropore_point_a]                                  = min(abs(sa3_macropore_point_a.x-x_array) );
+[M index_sa3_macropore_point_a]                                  = min(abs(sa3_macropore_point_a.x-x_nod_coord_in_x_ay_m) );
 sa3_macropore_point_a.y                                          = -2 * pi * sa3_macropore_point_a.x;
 sa3_macropore_point_a.z                                          = depth_groundwater_table_m + 1;
 xdist_array                                                      = sa3_macropore_point_a.x-x_nod_array; ydist_array = sa3_macropore_point_a.y-y_nod_array;zdist_array = sa3_macropore_point_a.z-z_nod_array;
@@ -138,7 +142,7 @@ sa3_macropore_point_a.legend                                     = sprintf('x = 
 sa3_macropore_point_a.mark_shape                                 = 'cx';
 
 sa1_macropore_point_a.x                                          = 140;
-[M index_sa1_macropore_point_a]                                  = min(abs(sa1_macropore_point_a.x-x_array) );
+[M index_sa1_macropore_point_a]                                  = min(abs(sa1_macropore_point_a.x-x_nod_coord_in_x_ay_m) );
 sa1_macropore_point_a.y                                          = -2 * pi * sa1_macropore_point_a.x;
 sa1_macropore_point_a.z                                          = depth_groundwater_table_m + 1;
 xdist_array                                                      = sa1_macropore_point_a.x-x_nod_array; ydist_array = sa1_macropore_point_a.y-y_nod_array;zdist_array = sa1_macropore_point_a.z-z_nod_array;
@@ -226,7 +230,7 @@ for nt = 1:200:length(ele)
     
     % write pressure and conc in matrix form.
     s_matrix                                                     = reshape(nod(nt).terms{s_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(s_matrix(:,1,:) ) );hold on;
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(s_matrix(:,1,:) ) );hold on;
     plot(x_nod_mtx_3d(source_point_index(1:ny:end) ),z_nod_mtx_3d(source_point_index(1:ny:end) ),'b*','MarkerSize',a.cz-2);
     plot(x_nod_mtx_3d(sink_point_index(1:ny:end) ),z_nod_mtx_3d(sink_point_index(1:ny:end) ),'r*','MarkerSize',a.cz-2);
     xline(sa2_macropore_point_a.x,'r-','linewidth',a.lw);
@@ -248,7 +252,7 @@ for nt = 1:200:length(ele)
           fig_pos.length,fig_pos.height]);    
     % write pressure and conc in matrix form.
     c_matrix                                                     = reshape(nod(nt).terms{c_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(c_matrix(:,1,:) ) );
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(c_matrix(:,1,:) ) );
     colorbar('eastoutside');
     get(gca,'xtick');
     set(gca,'linewidth',a.lw); 
@@ -263,12 +267,12 @@ for nt = 1:200:length(ele)
 %     a.sub31                                                    = subplot('position'...
 %          ,[fig_pos.left+2*fig_pos.length+0.5*fig_pos.length,fig_pos.bottom,...
 %           fig_pos.length,fig_pos.height]);    
-%     vx_array                                                   = cell2mat(arrayfun(@(y) y.terms{vx_idx},ele(nt),'UniformOutput',false) );
+%     vx_nod_coord_in_x_ay_m                                                   = cell2mat(arrayfun(@(y) y.terms{vx_idx},ele(nt),'UniformOutput',false) );
 %     vy_array                                                   = cell2mat(arrayfun(@(y) y.terms{vy_idx},ele(nt),'UniformOutput',false) );
-%     vz_array                                                   = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele(nt),'UniformOutput',false) );
-%     vx_mtx                                                     = reshape(vx_array,[nez, ney, nex]);
+%     vz_nod_coord_in_z_ay_m                                                    = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele(nt),'UniformOutput',false) );
+%     vx_mtx                                                     = reshape(vx_nod_coord_in_x_ay_m,[nez, ney, nex]);
 %     vy_mtx                                                     = reshape(vy_array,[nez, ney, nex]);
-%     vz_mtx                                                     = reshape(vz_array,[nez, ney, nex]);    
+%     vz_mtx                                                     = reshape(vz_nod_coord_in_z_ay_m ,[nez, ney, nex]);    
 %     a.plot31                                                   = contourf(squeeze(x_ele_mtx_3d(:,1,:) ),squeeze(z_ele_mtx_3d(:,1,:) ),squeeze(vy_mtx(:,1,:) ) .* squeeze( porosity_ele_mtx(:,1,:) ) * c.secPday);hold on;
 % 	set(gca,'ColorScale','log');
 %     colorbar;caxis([-1e-20 1]);
@@ -276,8 +280,8 @@ for nt = 1:200:length(ele)
 %     set(a.plot31,'AutoScale','on', 'AutoScaleFactor',0.5)
 %     hold off
 %     grid on;
-%     xlim([0 max(x_array)]);
-%     ylim([min(z_array) max(z_array)]);    
+%     xlim([0 max(x_nod_coord_in_x_ay_m)]);
+%     ylim([min(z_nod_coord_in_z_ay_m ) max(z_nod_coord_in_z_ay_m )]);    
 %     set(gca,'fontsize',a.fs,'fontweight','bold');
 %     title('Velocity (m/day) in macropore','FontSize',a.fs,'fontweight','bold');
 %     xlabel('Distance (m)','FontSize',a.fs);    
@@ -305,8 +309,8 @@ for nt = 1:200:length(ele)
     set(gca,'fontsize',a.fs,'fontweight','bold');
     set(Ax,'FontSize',a.fs,'fontweight','bold');
 	ylim([0 10]);
-    set(Ax(1),'XLim',[0 max(x_array(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
-	set(Ax(2),'XLim',[0 max(x_array(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
+    set(Ax(1),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
+	set(Ax(2),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
 	set(Line1,'linewidth',a.lw);
 	set(Line2,'linewidth',a.lw);	
     set(gca,'linewidth',a.lw); 
@@ -325,13 +329,13 @@ for nt = 1:200:length(ele)
          fig_pos.bottom,...
           fig_pos.xy_plot_length,fig_pos.height+0.01]);
     plot(nod(nt).terms{s_idx}(vertical_line_pond_centre.idx_nod_pore)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'r-','linewidth',a.lw) ;hold on
     plot(nod(nt).terms{s_idx}(vertical_line_pond_boundary.idx_nod_pore)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'g-','linewidth',a.lw) ;
     plot(nod(nt).terms{s_idx}(vertical_line_pond_outside.idx_nod_pore)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'b-','linewidth',a.lw) ;
         
     set(gca,'linewidth',a.lw); 
@@ -350,8 +354,8 @@ for nt = 1:200:length(ele)
 	set(p2,'FaceAlpha',0.3);
     xlim([-0.2 1.2]);
 % 	set(p3,'FaceAlpha',0.5);
-    txt  = sprintf('Result at day %.2f , k_silt                     = %.2e m2, k_macropore= %.2e m2, k_sand = %.2e m2, \n k_pond= %.2e m2,por_silt= %.2e,por_macropore= %.2e,por_pond= %.2e, init P in clay layer = %.2e Pa'...
-         ,nod(nt).tout*c.dayPsec,permeability_silt_m2,permeability_macropore_m2,permeability_sand_m2,permeability_pond_m2,porosity_silt,porosity_macropore,porosity_pond,initial_silt_layer_pressure_pa);  
+    txt  = sprintf('Result at day %.2f , k_clay                     = %.2e m2, k_macropore= %.2e m2, k_sand = %.2e m2, \n k_pond= %.2e m2,por_clay= %.2e,por_macropore= %.2e,por_pond= %.2e, init P in clay layer = %.2e Pa'...
+         ,nod(nt).tout*c.dayPsec,permeability_clay_m2,permeability_macropore_m2,permeability_sand_m2,permeability_pond_m2,porosity_clay,porosity_macropore,porosity_pond,initial_clay_layer_pressure_pa);  
     title(txt,'FontSize',a.fs-2);
     get(gca,'xtick');
     set(gca,'fontsize',a.fs,'fontweight','bold');
@@ -466,7 +470,7 @@ for nt = 1:200:length(ele)
           fig_pos.length,fig_pos.height]);
     % write pressure and conc in matrix form.
     s_matrix                                                     = reshape(nod(nt).terms{s_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(s_matrix(:,2,:) ) );hold on;
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(s_matrix(:,2,:) ) );hold on;
     plot(x_nod_mtx_3d(source_point_index(2:ny:end) ),z_nod_mtx_3d(source_point_index(2:ny:end) ),'b*','MarkerSize',a.cz-2);
     plot(x_nod_mtx_3d(sink_point_index(2:ny:end) ),z_nod_mtx_3d(sink_point_index(2:ny:end) ),'r*','MarkerSize',a.cz-2);
     colorbar('eastoutside');
@@ -486,7 +490,7 @@ for nt = 1:200:length(ele)
           fig_pos.length,fig_pos.height]);   
     % write pressure and conc in matrix form.
     c_matrix                                                     = reshape(nod(nt).terms{c_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(c_matrix(:,2,:) ) );
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(c_matrix(:,2,:) ) );
     colorbar('eastoutside');
     get(gca,'xtick');
     set(gca,'linewidth',a.lw); 
@@ -523,8 +527,8 @@ for nt = 1:200:length(ele)
     set(gca,'fontsize',a.fs,'fontweight','bold');
     set(Ax,'FontSize',a.fs,'fontweight','bold');
 	ylim([0 10]);
-    set(Ax(1),'XLim',[0 max(x_array(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
-	set(Ax(2),'XLim',[0 max(x_array(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
+    set(Ax(1),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
+	set(Ax(2),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
 	set(Line1,'linewidth',a.lw);
 	set(Line2,'linewidth',a.lw);	
     set(gca,'linewidth',a.lw); 
@@ -543,13 +547,13 @@ for nt = 1:200:length(ele)
           fig_pos.xy_plot_length,fig_pos.height+0.01]);
     
     plot(nod(nt).terms{s_idx}(vertical_line_pond_centre.idx_nod_pore+nez)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'r--','linewidth',a.lw) ;
     plot(nod(nt).terms{s_idx}(vertical_line_pond_boundary.idx_nod_pore+nez)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'g--','linewidth',a.lw) ;
     plot(nod(nt).terms{s_idx}(vertical_line_pond_outside.idx_nod_pore+nez)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'b--','linewidth',a.lw) ;   
      
     set(gca,'linewidth',a.lw); 
@@ -615,7 +619,7 @@ for nt = 1:200:length(ele)
           fig_pos.length,fig_pos.height]);
     % write pressure and conc in matrix form.
     s_matrix                                                     = reshape(nod(nt).terms{s_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(s_matrix(:,3,:) ) );hold on;
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(s_matrix(:,3,:) ) );hold on;
     plot(x_nod_mtx_3d(source_point_index(3:ny:end) ),z_nod_mtx_3d(source_point_index(3:ny:end) ),'b*','MarkerSize',a.cz-2);
     plot(x_nod_mtx_3d(sink_point_index(3:ny:end) ),z_nod_mtx_3d(sink_point_index(3:ny:end) ),'r*','MarkerSize',a.cz-2);
     colorbar('eastoutside');
@@ -636,7 +640,7 @@ for nt = 1:200:length(ele)
           fig_pos.length,fig_pos.height]);    
     % write pressure and conc in matrix form.
     c_matrix                                                     = reshape(nod(nt).terms{c_idx},[inp.nn1,inp.nn2,inp.nn3]);
-    contourf(x_array,z_array,squeeze(c_matrix(:,3,:) ) );
+    contourf(x_nod_coord_in_x_ay_m,z_nod_coord_in_z_ay_m ,squeeze(c_matrix(:,3,:) ) );
     colorbar('eastoutside');
     get(gca,'xtick');
     set(gca,'linewidth',a.lw); 
@@ -654,12 +658,12 @@ for nt = 1:200:length(ele)
 %     a.sub32                                                    = subplot('position'...
 %          ,[fig_pos.left+2*fig_pos.length+0.5*fig_pos.length,fig_pos.bottom-2*fig_pos.height-1.5*fig_pos.height,...
 %           fig_pos.length,fig_pos.height]);    
-%     vx_array                                                   = cell2mat(arrayfun(@(y) y.terms{vx_idx},ele(nt),'UniformOutput',false) );
+%     vx_nod_coord_in_x_ay_m                                                   = cell2mat(arrayfun(@(y) y.terms{vx_idx},ele(nt),'UniformOutput',false) );
 %     vy_array                                                   = cell2mat(arrayfun(@(y) y.terms{vy_idx},ele(nt),'UniformOutput',false) );
-%     vz_array                                                   = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele(nt),'UniformOutput',false) );
-%     vx_mtx                                                     = reshape(vx_array,[nez, ney, nex]);
+%     vz_nod_coord_in_z_ay_m                                                    = cell2mat(arrayfun(@(y) y.terms{vz_idx},ele(nt),'UniformOutput',false) );
+%     vx_mtx                                                     = reshape(vx_nod_coord_in_x_ay_m,[nez, ney, nex]);
 %     vy_mtx                                                     = reshape(vy_array,[nez, ney, nex]);
-%     vz_mtx                                                     = reshape(vz_array,[nez, ney, nex]);    
+%     vz_mtx                                                     = reshape(vz_nod_coord_in_z_ay_m ,[nez, ney, nex]);    
 %     a.plot32                                                   = contourf(squeeze(x_ele_mtx_3d(:,2,:) ),squeeze(z_ele_mtx_3d(:,2,:) ),squeeze(vy_mtx(:,2,:) ) .*  squeeze( porosity_ele_mtx(:,2,:) ) * c.ms2mmday);hold on;
 % 	set(gca,'ColorScale','log');   
 % 	colorbar;caxis([-1e-20 11]);
@@ -667,8 +671,8 @@ for nt = 1:200:length(ele)
 %     set(a.plot32,'AutoScale','on', 'AutoScaleFactor',0.5)
 %     hold off
 %     grid on; 
-%     xlim([0 max(x_array)]);
-%     ylim([min(z_array) max(z_array)]);      
+%     xlim([0 max(x_nod_coord_in_x_ay_m)]);
+%     ylim([min(z_nod_coord_in_z_ay_m ) max(z_nod_coord_in_z_ay_m )]);      
 %     set(gca,'fontsize',a.fs,'fontweight','bold');
 %     title('Velocity (m/day) in the matrix','FontSize',a.fs,'fontweight','bold');
 %     xlabel('Distance (m)','FontSize',a.fs);    
@@ -692,8 +696,8 @@ for nt = 1:200:length(ele)
     set(gca,'fontsize',a.fs,'fontweight','bold');
     set(Ax,'FontSize',a.fs,'fontweight','bold');
 	ylim([0 10]);
-    set(Ax(1),'XLim',[0 max(x_array(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
-	set(Ax(2),'XLim',[0 max(x_array(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
+    set(Ax(1),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 1.1],'YTick',[0, 0.5, 1],'fontsize',a.fs,'linewidth',a.lw);
+	set(Ax(2),'XLim',[0 max(x_nod_coord_in_x_ay_m(:) )],'YLim',[0 10],'YTick',[0, 2, 4, 6],'fontsize',a.fs,'linewidth',a.lw);
 	set(Line1,'linewidth',a.lw);
 	set(Line2,'linewidth',a.lw);	
     set(gca,'linewidth',a.lw); 
@@ -711,13 +715,13 @@ for nt = 1:200:length(ele)
          fig_pos.bottom-2*fig_pos.height-1.5*fig_pos.height,...
           fig_pos.xy_plot_length,fig_pos.height+0.01]);
     plot(nod(nt).terms{s_idx}(vertical_line_pond_centre.idx_nod_matrix)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'r:','linewidth',a.lw) ;hold on
     plot(nod(nt).terms{s_idx}(vertical_line_pond_boundary.idx_nod_matrix)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'g:','linewidth',a.lw) ;
     plot(nod(nt).terms{s_idx}(vertical_line_pond_outside.idx_nod_matrix)...
-         ,z_array...
+         ,z_nod_coord_in_z_ay_m ...
          ,'b:','linewidth',a.lw) ;
         
     set(gca,'linewidth',a.lw); 
@@ -1135,9 +1139,9 @@ for nt = 1:200:length(ele)
     h66                                                          = plot(time_measured_data_day,pet_observed_kg/c.mlPl,'color','#0A952C','LineStyle','--','linewidth',a.lw,'DisplayName','ET-obs');
     h7                                                           = plot(time_nod_day(1:nt),(Infiltration_kg(1:nt)-Infiltration_kg(1) )/c.mlPl,'k-','linewidth',a.lw,'DisplayName','Infiltration');%%infiltration from model
     h77                                                          = plot(time_measured_data_day,Tbl.infiltration_cum_ML,'k--','linewidth',a.lw,'DisplayName','Infiltration-obs');    
-    h8                                                           = plot(time_nod_day(1:nt),silt_zone_water_cell_kg(1:nt)/c.mlPl,'linewidth',a.lw,'DisplayName','Water in the clay layer');
+    h8                                                           = plot(time_nod_day(1:nt),clay_zone_water_cell_kg(1:nt)/c.mlPl,'linewidth',a.lw,'DisplayName','Water in the clay layer');
 %     h9                                                         = plot(time_nod_day(1:nt),input_total_kg(1:nt)/c.mlPl-pond_water_sum_kg(1:nt)/c.mlPl-...
-%                cumsum(sum(-c.rhow_pure_water*area_xy_mtx_m2(sink_point_index_gravity_compensated) .* et_mmPday(:,1:nt)*c.mPmm*c.dayPsec .* time_series(1:nt),1) )/c.mlPl-silt_zone_water_cell_xyt_kg(1:nt)/c.mlPl,'linewidth',a.lw);%%infiltration from model
+%                cumsum(sum(-c.rhow_pure_water*area_xy_mtx_m2(sink_point_index_gravity_compensated) .* et_mmPday(:,1:nt)*c.mPmm*c.dayPsec .* time_series(1:nt),1) )/c.mlPl-clay_zone_water_cell_xyt_kg(1:nt)/c.mlPl,'linewidth',a.lw);%%infiltration from model
     %     a.plot1                                                = plot(time_measured_data_day(1:1000:end), Tbl.sa2_groundwater_table_rise_mm(1:1000:end)*c.mPmm,'b.','displayname','Mea. at SA2' );hold on
     hold off
 
@@ -1192,12 +1196,13 @@ for nt = 1:200:length(ele)
     a.sub8             = subplot('position'...
                     ,[fig_pos.left+5.7*fig_pos.length,fig_pos.bottom-3*fig_pos.height-2.2*fig_pos.height...
                     fig_pos.length,fig_pos.height]);        
-    h1                                                           = plot(squeeze(x_ele_mtx_3d(1,1,:) ),squeeze(sum(aquitard_flux_ele_xy_kgPs(:,1,:,nt),1) )/c.dayPsec,'r-','linewidth',a.lw);hold on;
-    h2                                                           = plot(squeeze(x_ele_mtx_3d(1,1,:) ),squeeze(sum(aquitard_flux_ele_xy_kgPs(:,2,:,nt),1) )/c.dayPsec,'r:','linewidth',a.lw);
+    h1                                                           = plot(squeeze(x_ele_mtx_3d(1,1,:) ),squeeze(sum(aquitard_flux_ele_xy_kgPs(1:ney:end,:),2) )./area_xy_ele_mtx_m2_2d(1,:)'/c.dayPsec,'r-','linewidth',a.lw);hold on;
+    h2                                                           = plot(squeeze(x_ele_mtx_3d(1,1,:) ),squeeze(sum(aquitard_flux_ele_xy_kgPs(2:ney:end,:),2) )./area_xy_ele_mtx_m2_2d(2,:)'/c.dayPsec,'r:','linewidth',a.lw);
     xlim([0 max(squeeze(x_ele_mtx_3d(1,1,:) ) )]);
+    ylim([-0.03 0.03]);
 %     ylim([min(aquitard_flux_ele_xy_kgPs(:) )/c.dayPsec max(aquitard_flux_ele_xy_kgPs(:) )/c.dayPsec]);
     xlabel('Distance (m)','FontSize',a.fs);      
-    ylabel({'Flux (kg/day)'},'FontSize',a.fs); 
+    ylabel({'Flux (kg/m2/day)'},'FontSize',a.fs); 
     set(gca,'fontsize',a.fs,'fontweight','bold');        
     set(gca,'linewidth',a.lw); 
     grid on;
