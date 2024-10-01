@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 29 07:12:39 2023
 
-@author: Yuanchi Xiao, Chenming Zhang
+@author:  Chenming Zhang, Yuanchi Xiao
 
 procedure to run the code:
     
@@ -12,46 +11,78 @@ procedure to run the code:
         conda install -c conda-forge gdal=3.6.2
         conda install -c conda-forge flopy
         conda install matplotlib=3.7.1
-        
-        
+        #conda install osgeo
         pip install gdal ==3.6.2
         #conda update Pillow
        Avoid mixing use of flopy and conda interchangeablly that may cause dependency issues
+       
+       for python3.12.x
+       conda install -c conda-forge gdal
+       conda install matplotlib
+       
     3. enter spyder in the Anaconda Powershell Prompt
         
-"""
+as of 241001
+3.12.3 | packaged by conda-forge | (main, Apr 15 2024, 18:20:11) [MSC v.1938 64 bit (AMD64)]
+numpy version: 1.26.4
+matplotlib version: 3.9.2
+flopy version: 3.8.1
 
+
+#CZ241001 matplotlib qt needs to be executed to ensure the contour map is shown 
+on top of a map.
+
+%matplotlib qt
+or 
+import matplotlib as mpl
+mpl.use('TkAgg')
+
+
+Stress period 1 
+
+Stress period 1 (30 years): boundary + river, to simulate the conditions before farming
+Stress period 2 (2 years): boundary + river + farming, for 50 years, to simulate the additional flow and salt load to the river caused by irrigation
+Stress period 3 (3 years): boundary + river + farming + pump, to simulate how effective salt interception scheme can reduce salt load
+Stress period 4: boundary + river + farming + pump + watering, to simulate how much additional salt is introduced to the river due to watering
+
+
+"""
+# %%## 
 # =============================================================================
-# ===== CIVL4145 Course Project (2023)
+# ===== CIVL4145 Course Project 
 # ===== USING MODFLOW 6 TO SIMULATE GROUNDWATER FLOW AT A FLOODPLAIN OF The RIVER MURRAY
 # =============================================================================
 
 # =============================================================================
 # ===== 0.0 PYTHON ENVIRONMENT SET-UP =========================================
 # =============================================================================
-#import matplotlib as mpl
-
-#mpl.use('TkAgg')
+import matplotlib as mpl
+mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import flopy
 import numpy as np
 from osgeo import gdal
-from osgeo import ogr
 import pandas as pd
-import matplotlib.animation as animation
 import matplotlib as mpl
+import sys
+import os
+
+print(sys.version)
+print(f"numpy version: {np.__version__}")
+print(f"matplotlib version: {mpl.__version__}")
+print(f"flopy version: {flopy.__version__}")
+
 # Specifying executable location, working folder and simulation name
-mf6exe = '//puffball.labs.eait.uq.edu.au/uqczhan2/Desktop/modflow6/ewatering_flopy/mf6.exe'
+#mf6exe = '//puffball.labs.eait.uq.edu.au/uqczhan2/Desktop/modflow6/ewatering_flopy/mf6.exe'
+mf6exe =  os.path.join(os.getcwd(),'mf6.exe') #'D:/OneDrive/OneDrive - The University of Queensland/Teaching/CIVL4145/2024/ewatering_flopy/mf6.exe'
 ws = '' # working directory
-sim_name = "5_stress_pd"
+sim_name      = "5_stress_pd"
 layer_1_top   = "Coonambidgal_dem.tif"
 layer_2_top   = "Monoman_dem.tif"
 recharge_data_irrigation_only = pd.read_csv("recharge_irrigation_only.csv")
 recharge_data = pd.read_csv("recharge_irrigation_inundation.csv")
 river_data    = pd.read_csv("river.csv")
 sis_well_data = pd.read_csv("sis_well.csv")
-
-
 
 layer_1_top_data                = gdal.Open(layer_1_top)
 #layer_1_top_band                = layer_1_top_data.GetRasterBand(1)
@@ -70,6 +101,7 @@ mask_highland                   = layer_1_top_m_mtx >= 20
 fs_title_1 = 12
 fs_title_sub = 10
 mpl.rcParams['image.cmap'] = 'jet'
+# %%# --- 
 # =============================================================================
 # ===== 1.0 DEFINING BASIC FloPy MODEL PROPERTIES =============================
 # =============================================================================
@@ -77,17 +109,16 @@ mpl.rcParams['image.cmap'] = 'jet'
 # ===== 1.1 Setting length and time units
 length_units = "meters"
 time_units = "days"
+no_days_in_a_year = 365
 # Setting three stress periods perlen(10000 days, 351 days, 100 days)
-#perlen = [1*10000, 365*2,365*10,365*1,365*2]  # Simulation time [days]
-perlen = [1*10000, 365*3,365*3,365*1,365*2]
+#perlen = [1*10000, no_days_in_a_year*2,no_days_in_a_year*10,no_days_in_a_year*1,no_days_in_a_year*2]  # Simulation time [days]
+perlen = no_days_in_a_year* np.array([30, 2,3,1,2])
 perlen_cum = np.cumsum(perlen)
 nper = len(perlen)
-#nstp = [1, 10, 365*3, 365,365/5]  # orginal
+#nstp = [1, 10, no_days_in_a_year*3, no_days_in_a_year,no_days_in_a_year/5]  # orginal
+#nstp = [1, 10, int(no_days_in_a_year/10), int(no_days_in_a_year/10), int(no_days_in_a_year/10)]  # working 
 
-nstp = [1, 10, int(365/10), int(365/10), int(365/10)]  # working 
-
-nstp = [1, 10, int(365/20), int(365/20), int(365/20)]   
-
+nstp = [1, 10, int(no_days_in_a_year/20), int(no_days_in_a_year/20), int(no_days_in_a_year/20)]   
 
 tsmult = [1.0, 1.0, 1.0, 1.0,1.0]
 
@@ -102,7 +133,7 @@ yoff = 6230437 # lower left y-coordinate
 nrow = int(np.round(Ly/delr)) # Number of rows
 # Add extra 2 columns for west & east boundary cells (affects x plot locations)
 ncol = int(np.round(Lx/delc)) # Number of columns
-nlay = 2  # Number of layers
+nlay = 2  # Number of layers, only coonambidgal and Monoman sands are included
 #delz = [3.0, 7.0, 2.0]  # Layer thickness [m] (starting at top layer),need to use dem 
 Coonambidgal_thickness = layer_1_top_m_mtx - layer_2_top_m_mtx
 #top = 12.0  # Elevation of top of the model [m], need to chek dem
@@ -113,28 +144,27 @@ basez = -26.0  # Elevation of base of the model [m]
 # for k in range(1,nlay):
 #     botz.append(botz[k-1]-delz[k])
 
-
 botm = np.zeros((nlay, nrow, ncol), dtype=float)
 # for k in np.arange(nlay):
 botm[0,:,:] = layer_2_top_m_mtx #coonambidgal clay bottom, also the top of the monoman sand 
 botm[1,:,:] = basez*np.ones((nrow, ncol), dtype=float) #sand bottom, also the top of the monoman sand 
 
-# ===== 1.3 Setting hydraulic and solute transport properties
+# %%===== 1.3 Setting hydraulic and solute transport properties
 # Porosity [-] Ss and Sy, essential:note that porosity is only effctive for gwt
 #prsity = 0.30  # Porosity
 nclay = 0.03    # Porosity of clay
 nsand = 0.15    # Porosity of sand
 prsity = np.ones((nlay, nrow, ncol), dtype=float) # Establish variable
-prsity[0,:,:]=nclay   # Set layer 2 porosity to nsand
-prsity[1,:,:]=nsand   # Set layer 0 porosity to nsand  
+prsity[0,:,:] = nclay   # Set layer 2 porosity to nsand
+prsity[1,:,:] = nsand   # Set layer 0 porosity to nsand  
 ss_sand = 1e-4
 ss_clay = 1e-4
 ss = np.ones((nlay, nrow, ncol), dtype=float) # Establish variable
 ss[0,:,:] = ss_clay
 ss[1,:,:] = ss_sand
 
-sy_sand = 0.15
-sy_clay = 0.03 
+sy_sand = 0.15  # specific yield of sand
+sy_clay = 0.03  # specific yield of clay
 sy = np.ones((nlay, nrow, ncol), dtype=float)
 sy[0,:,:] = sy_clay
 sy[1,:,:] = sy_sand
@@ -154,41 +184,43 @@ k11[1,:,:] = k11_2
 
 k33 = 0.01*k11.copy()  # Vertical hydraulic conductivity [m/d]
 
-fig= plt.figure(dpi=200)
+
+# %% plot the hydraulic conductivity
+fig = plt.figure(dpi=200)
 ax1 = plt.subplot(1,2,1)
 ax1.set_aspect('equal')
 im1=ax1.imshow(k11[0,:,:]) 
 ax1.set_xlabel('Distance (m)')
 ax1.set_ylabel('Distance (m)')
 ax1.set_title('Layer 1 ',fontsize=fs_title_sub)
-im1.set_clim(0,5)
+#im1.set_clim(0,5)
 ax2 = plt.subplot(1,2,2)
 im2=ax2.imshow(k11[1,:,:]) 
 ax2.set_aspect('equal')
 ax2.set_xlabel('Distance (m)')
 ax2.set_ylabel('Distance (m)')
 ax2.set_title('Layer 2',fontsize=fs_title_sub)
-im2.set_clim(0,5)
-plt.tight_layout()
-cbar_ax = fig.add_axes([0.35, 0.18, 0.4, 0.02])
+#im2.set_clim(0,5)
+#plt.tight_layout()
+#cbar_ax = fig.add_axes([0.35, 0.18, 0.4, 0.02])
 # cbar = fig.colorbar(im1, cax=cbar_ax,location='bottom',orientation='horizontal')
 # cbar.ax.tick_params(axis='x', direction='in')
-plt.figtext(0.35, 0.75, 'Hydraulic conductiivity (m/day)',fontsize=fs_title_1)
-plt.savefig('k.png')
+plt.figtext(0.3, 0.8, 'Hydraulic conductiivity (m/day)',fontsize=fs_title_1)
+plt.savefig('Hydraulic_conductivity.png')
 
-# Dispersivity (nitrate)
-al = 10              # Longitudinal dispersivity [m]
-trpt = 0.1             # Ratio of transverse to longitudinal dispersitivity
-trpv = 0.1           # Ratio of vertical to longitudinal dispersitivity
-ath1 = al * trpt       # Transverse dispersivity [m]
-ath2 = al * trpv       # Vertical dispersivity [m]
-sconc = 35.0            # Starting soute concentration (C(t=0))
-dmcoef = 1.468e-4     # Molecular diffusion coefficient [m**2/d]
+# %% Dispersivity (nitrate) inactivated
+# al = 10              # Longitudinal dispersivity [m]
+# trpt = 0.1             # Ratio of transverse to longitudinal dispersitivity
+# trpv = 0.1           # Ratio of vertical to longitudinal dispersitivity
+# ath1 = al * trpt       # Transverse dispersivity [m]
+# ath2 = al * trpv       # Vertical dispersivity [m]
+# sconc = 35.0            # Starting soute concentration (C(t=0))
+# dmcoef = 1.468e-4     # Molecular diffusion coefficient [m**2/d]
 
 # Recharge
 # rech = 0.012 # Recharge rate [m/d], 12 mm/day
 
-# Specify saturated thickness method
+# %% Specify saturated thickness method
 # (0=constant (confined?), >0=varies with head in cell (unconfined), <0=variable)
 icelltype = 1
 
@@ -219,10 +251,23 @@ idomain = np.ones((nlay, nrow, ncol), dtype=int)
 well   = []
 welspd = {}
 for i in range(len(sis_well_data)):
-    well.append([(sis_well_data.l[i]-1,sis_well_data.r[i]-1,sis_well_data.c[i]-1),\
-            -sis_well_data.Q[i],sis_well_data.concentration[i]])
-welspd = {0:0,1:0,2:well,3:well,4:well}
-# ===== 1.5 Define recharge information
+#    well.append([(sis_well_data.l[i]-1,sis_well_data.r[i]-1,sis_well_data.c[i]-1),\
+#            -sis_well_data.Q[i],sis_well_data.concentration[i]])
+    well.append([ (sis_well_data.l[i]-1,sis_well_data.r[i]-1,sis_well_data.c[i]-1),\
+            -sis_well_data.Q[i] ,sis_well_data.concentration[i]])
+        
+welspd = {0:None,1:None,2:well,3:well,4:well}    # CZ241001 they do not like None
+
+
+# flopy.mf6.ModflowGwfwel(gwf,
+#                         print_input=True,
+#                         print_flows=True,
+#                         stress_period_data=welspd,
+#                         save_flows=True,
+#                         auxiliary="WELL",
+#                         pname="WEL-1",
+#                         filename="{}.wel".format(gwfname),)
+# %%===== 1.5 Define recharge information
 # Recharge stress perdiod data needed if recharge method 1 (general recharge
 # package is used).
 rchspd = []
@@ -244,21 +289,24 @@ for i in range(len(recharge_data_irrigation_only)):
         #             [(lay, row, col), recharge, conc]
     rch_inundation_only.append([(  0,   row,   column),     rech,  0.001])
     
-rchspd = {0: 0,1: rch_inundation_only,2:rch_inundation_only,3:rch_inundation_irrigation, 4: rch_inundation_only}
+rchspd = {0: None,1: rch_inundation_only,2:rch_inundation_only,3:rch_inundation_irrigation, 4: rch_inundation_only}
 
 # ===== 1.6 Define general head boundaries
 left_ghb_m  = 17.6
 right_ghb_m = 18.0
+
 ghbspd = []
 ghb = []
 for col in range(ncol):
     stage = left_ghb_m + (col / (ncol - 1)) * (right_ghb_m - left_ghb_m)  # Linearly increasing stage
-    ghb.append([1, nrow-1, col, stage, 1000])  # [layer, row, column, stage, conductance]
+    #ghb.append([1, nrow-1, col, stage, 1000])  # [layer, row, column, stage, conductance]
+    ghb.append([ (1,nrow-1, col),stage, 1000,layer_1_top_m_mtx[nrow-1,col] ]) #,  1000,stage])  # [(k, 0, ncol - 1), top, ghbcond, 35.0] 
+    # https://github.com/MODFLOW-USGS/modflow6-examples/blob/c5b10d3bcd87c06810dc954a788f7fb739ca2cc2/scripts/ex-gwt-henry.py#L137
 ghbspd = {0: ghb, 1: ghb,2: ghb,3:ghb,4:ghb}
 
 
-# ===== 1.7 Define river boundaries
-
+# %% ===== 1.7 Define river boundaries
+ 
 riv    = []
 rivspd = []
 for i in range(len(river_data)):
@@ -272,7 +320,8 @@ for i in range(len(river_data)):
         rbot = river_data.Bottom[i]
     else:
         rbot = river_data.Bottom[i]
-    riv.append([0, row, column, stage, conductance, rbot,0])
+    # CZ241001 this seems to be revised in flopy
+    riv.append([(0, row, column), stage, conductance, rbot,0])
 rivspd = {0: riv, 1: riv, 2:riv,3:riv,4:riv}
         
 # ===== 1.7 Define solver settings
@@ -295,7 +344,7 @@ npsink = nph
 tdis_rc = []
 tdis_rc.append((perlen, nstp, 1.0))
 
-# =============================================================================
+# %%=============================================================================
 # ===== 2.0 CREATE FLOW MODEL OBJECTS AND DEFINE FLOW PACKAGES ================
 # =============================================================================
 name = "Ewatering"
@@ -373,6 +422,8 @@ sto = flopy.mf6.ModflowGwfsto(gwf,
                               sy=sy,
                               filename="{}.sto".format(gwfname),)
 
+
+#ghbspd = {0: ghb, 1: ghb,2: ghb,3:ghb ,4:ghb}
 # ===== 2.8 Defining MODFLOW 6 constant head package
 flopy.mf6.ModflowGwfghb(gwf,
                         maxbound=len(ghbspd),
@@ -433,7 +484,7 @@ flopy.mf6.ModflowGwfoc(gwf,
                        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
                        printrecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],)
 
-# #=============================================================================
+# %%#=============================================================================
 # #===== 3.0 CREATE TRANSPORT MODEL OBJECTS AND DEFINE TRANSPORT PACKAGES ======
 # #=============================================================================
 # gwtname = "gwt_" + name
@@ -551,7 +602,7 @@ flopy.mf6.ModflowGwfoc(gwf,
 #                         exgmnameb=gwtname,
 #                         filename="{}.gwfgwt".format(name),)
 
-# =============================================================================
+#%%=============================================================================
 # ===== 4.0 CREATE MODFLOW 6 INPUT FILES AND RUN THE SIMULATION ===============
 # =============================================================================
 
@@ -564,7 +615,7 @@ assert success, "MODFLOW 6 did not terminate normally."
 
 # %%    ----
 
-# =============================================================================
+# %%=============================================================================
 # ===== 5.0 POST-PROCESS SIMULATION RESULTS ===================================
 # =============================================================================
 import matplotlib.image as image
@@ -599,21 +650,30 @@ ycoords = np.array(ys)
 # ===== Set timestep to use
 targetTime_sp1 = np.array([0])
 targetTime_sp2 = perlen[0]+np.array([200,300,400,500,600])
-targetTime_sp3 = perlen[0]+perlen[1]+np.int32(365 * np.linspace(0,3,10))
-targetTime_sp4 = perlen[0]+perlen[1]+perlen[2]+np.int32(np.linspace(0,365,10))
-targetTime_sp5 = perlen[0]+perlen[1]+perlen[2]+perlen[3]+np.int32(np.linspace(0,365*2,10))
+targetTime_sp3 = perlen[0]+perlen[1]+np.int32(no_days_in_a_year * np.linspace(0,3,10))
+targetTime_sp4 = perlen[0]+perlen[1]+perlen[2]+np.int32(np.linspace(0,no_days_in_a_year,10))
+targetTime_sp5 = perlen[0]+perlen[1]+perlen[2]+perlen[3]+np.int32(np.linspace(0,no_days_in_a_year*2,10))
+
+
+targetTime_sp1 = np.array([0])
+targetTime_sp2 = perlen[0]+np.int32( np.linspace(0,  perlen[1], 5 )  )
+targetTime_sp3 = perlen[0]+perlen[1]+np.int32( np.linspace(0,  perlen[2], 5 )  )
+targetTime_sp4 = perlen[0]+perlen[1]+perlen[2] +np.int32( np.linspace(0,  perlen[3], 5 )  )
+targetTime_sp5 = perlen[0]+perlen[1]+perlen[2]++np.int32( np.linspace(0,  perlen[4], 5 )  )
+
 targetTime = np.concatenate([targetTime_sp1,targetTime_sp2,targetTime_sp3,targetTime_sp4,targetTime_sp5])
 timeIDX=np.zeros(np.size(targetTime),dtype='int32')
 klay=1
 for k in range(len(targetTime)):
+    print(k)
     timeIDX[k] = np.int32([i for i, v in enumerate(timesteps) if v >= targetTime[k]][0])
     dispTime = timesteps[timeIDX[k]]
     # ===== Set layer to plot
     fig = plt.figure(figsize=(12, 10),dpi=150, tight_layout=True)
     ax1 = fig.add_subplot(1, 1, 1, aspect="equal")
     ax1.set_title("Hydrualic Head: Layer " + "{}".format(klay) +
-             " (Time = " + "{}".format(dispTime) + " "
-             "{}".format(time_units) + ")",
+             " (Time = " + "{:.1f}".format(dispTime/no_days_in_a_year) + " "
+             "{}".format("years") + ")",
              loc='left')
     plt.xlabel("Distance along x-axis [m]")
     plt.ylabel("Distance along y-axis [m]")
@@ -645,7 +705,7 @@ for k in range(len(targetTime)):
     plt.savefig(f'{targetTime[k]}.png')
     plt.close()
 
-# ===== 5.4 Plotting cross-section of head and solute data
+# %%===== 5.4 Plotting cross-section of head and solute data
 rowID = 70 # Specify the row to use for cross section
 colID = 111
 klay  = 1
@@ -653,8 +713,8 @@ fig = plt.figure(figsize=(8, 8),dpi=150, tight_layout=True)
 # Hydraluic heads vertical section
 ax = fig.add_subplot(1, 1, 1,aspect=30)
 ax.set_title("Hydraulic head: Vertical section - Row " +
-             "{}".format(rowID) + " (Time = " + "{}".format(dispTime) + " "
-             "{}".format(time_units) + ")", loc='left')
+             "{}".format(rowID) + " (Time = " + "{:.1f}".format(dispTime/no_days_in_a_year  ) + " "
+             "{}".format('years') + ")", loc='left')
 plt.xlabel("Distance along x-axis [m]")
 plt.ylabel("Elevation (z-axis) [m]")
 xsect = flopy.plot.PlotCrossSection(model=gwf, line={"column": rowID})
@@ -673,12 +733,13 @@ plt.tight_layout()
 
 
 plt.figure()
-plt.plot(np.array(timesteps)/365,head[:,klay,rowID,colID])
+plt.plot(np.array(timesteps)/no_days_in_a_year,head[:,klay,rowID,colID])
 plt.xlabel('Time (year)')
 plt.ylabel('Head (mAHD)')
 plt.title('Head at SA2')
 plt.grid()
 plt.savefig('head_sa2.jpg')
+plt.close('all')
 # # create modpath files
 # mpnamf = f"{sim_name}_mp_forward"
 
