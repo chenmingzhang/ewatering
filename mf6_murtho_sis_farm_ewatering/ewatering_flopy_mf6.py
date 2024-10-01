@@ -5,22 +5,12 @@
 
 procedure to run the code:
     
-    1. In the lab PC environment, open up Laboratory Software -> Anaconda3 (64-bit) -> Anaconda Powershell Prompt (Anaconda3)
-    2. Packages to be installed (may need to answer y during the installation): 
-        conda install -c main rasterio=1.3.8
-        conda install -c conda-forge gdal=3.6.2
-        conda install -c conda-forge flopy
-        conda install matplotlib=3.7.1
-        #conda install osgeo
-        pip install gdal ==3.6.2
-        #conda update Pillow
-       Avoid mixing use of flopy and conda interchangeablly that may cause dependency issues
-       
-       for python3.12.x
-       conda install -c conda-forge gdal
-       conda install matplotlib
-       
-    3. enter spyder in the Anaconda Powershell Prompt
+    1. open spyder
+    2. type in the command line 
+        pip install flopy
+        pip install rasterio
+    3. restart the spyder kernel
+        
         
 as of 241001
 3.12.3 | packaged by conda-forge | (main, Apr 15 2024, 18:20:11) [MSC v.1938 64 bit (AMD64)]
@@ -61,7 +51,6 @@ mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import flopy
 import numpy as np
-#from osgeo import gdal
 import pandas as pd
 import matplotlib as mpl
 import sys
